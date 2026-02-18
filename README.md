@@ -48,7 +48,7 @@ go build cmd/main.go cmd/renderer.go
 ./main     # on Unix systems
 ```
 
-4. Open your browser and navigate to `http://localhost:8080`
+4. Open your browser and navigate to `http://localhost:8880`
 
 ## Usage
 

@@ -21,7 +21,7 @@ type AgentClient struct {
 func NewAgentClient() *AgentClient {
 	return &AgentClient{
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 180 * time.Second, // Increased to 3 minutes
 		},
 	}
 }
@@ -70,11 +70,11 @@ type Choice struct {
 
 // AnthropicRequest represents a request to Anthropic Claude API
 type AnthropicRequest struct {
-	Model             string    `json:"model"`
-	MaxTokens         int       `json:"max_tokens"`
-	Temperature       float64   `json:"temperature"`
-	Messages          []Message `json:"messages"`
-	System            string    `json:"system,omitempty"`
+	Model       string    `json:"model"`
+	MaxTokens   int       `json:"max_tokens"`
+	Temperature float64   `json:"temperature"`
+	Messages    []Message `json:"messages"`
+	System      string    `json:"system,omitempty"`
 }
 
 // AnthropicResponse represents a response from Anthropic Claude API
@@ -86,10 +86,10 @@ type AnthropicResponse struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
 	} `json:"content"`
-	Model     string `json:"model"`
-	StopReason string `json:"stop_reason"`
+	Model        string `json:"model"`
+	StopReason   string `json:"stop_reason"`
 	StopSequence string `json:"stop_sequence"`
-	Usage struct {
+	Usage        struct {
 		InputTokens  int `json:"input_tokens"`
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage"`
@@ -123,8 +123,8 @@ type GoogleResponse struct {
 			} `json:"parts"`
 			Role string `json:"role"`
 		} `json:"content"`
-		FinishReason string `json:"finishReason"`
-		Index       int    `json:"index"`
+		FinishReason  string `json:"finishReason"`
+		Index         int    `json:"index"`
 		SafetyRatings []struct {
 			Category    string `json:"category"`
 			Probability string `json:"probability"`
@@ -140,9 +140,10 @@ type GoogleResponse struct {
 // CallAgent sends a request to an AI agent and returns the response
 func (ac *AgentClient) CallAgent(ctx context.Context, agent *models.Agent, prompt string, contextStr string) (*models.AgentResponse, error) {
 	startTime := time.Now()
-	
-	// Create context with timeout based on agent's configuration
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(agent.TimeoutSeconds)*time.Second)
+
+	// Create context with timeout based on agent's configuration + buffer
+	timeoutDuration := time.Duration(agent.TimeoutSeconds+10) * time.Second // Add 10s buffer
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeoutDuration)
 	defer cancel()
 
 	var response *models.AgentResponse
@@ -150,7 +151,9 @@ func (ac *AgentClient) CallAgent(ctx context.Context, agent *models.Agent, promp
 
 	// Determine provider type and call appropriate method
 	providerType := detectProviderType(agent.ProviderURL)
-	
+
+	fmt.Printf("Calling agent %s (%s) with timeout %v\n", agent.Name, providerType, timeoutDuration)
+
 	switch providerType {
 	case "ollama":
 		response, err = ac.callOllama(timeoutCtx, agent, prompt, contextStr)
@@ -168,9 +171,58 @@ func (ac *AgentClient) CallAgent(ctx context.Context, agent *models.Agent, promp
 	}
 
 	responseTime := int(time.Since(startTime).Milliseconds())
-	response.ResponseTime = responseTime
+	if response != nil {
+		response.ResponseTime = responseTime
+	}
+
+	if err != nil {
+		fmt.Printf("Agent %s call failed: %v\n", agent.Name, err)
+	}
 
 	return response, err
+}
+
+// setAuthHeaders ensures consistent header setting across all methods
+func (ac *AgentClient) setAuthHeaders(req *http.Request, agent *models.Agent) {
+	providerType := detectProviderType(agent.ProviderURL)
+	token := strings.TrimSpace(agent.APIToken)
+	if token == "" {
+		return
+	}
+
+	switch providerType {
+	case "anthropic":
+		req.Header.Set("x-api-key", token)
+		req.Header.Set("anthropic-version", "2023-06-01")
+	case "google":
+		req.Header.Set("x-goog-api-key", token)
+	default:
+		// OpenAI, Ollama, Custom
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
+// getChatEndpoints returns a prioritized list of chat endpoints for an agent
+func (ac *AgentClient) getChatEndpoints(agentURL string) []string {
+	baseURL := strings.TrimSuffix(strings.TrimSpace(agentURL), "/")
+
+	// If it's already a full endpoint, use it directly
+	if strings.Contains(baseURL, "/chat/completions") || strings.Contains(baseURL, "/generate") {
+		return []string{baseURL}
+	}
+
+	// For OpenAI/Custom, try variants
+	if strings.HasSuffix(baseURL, "/v1") {
+		return []string{
+			baseURL + "/chat/completions",
+		}
+	}
+
+	return []string{
+		baseURL + "/v1/chat/completions",
+		baseURL + "/chat/completions",
+		baseURL,
+	}
 }
 
 // detectProviderType determines the provider type from URL
@@ -192,13 +244,13 @@ func detectProviderType(url string) string {
 func (ac *AgentClient) callAnthropic(ctx context.Context, agent *models.Agent, prompt string, contextStr string) (*models.AgentResponse, error) {
 	// Build messages array for Claude
 	var messages []Message
-	
+
 	// Add user message with context if available
 	userMessage := prompt
 	if contextStr != "" {
 		userMessage = fmt.Sprintf("Previous context from other agents:\n%s\n\nYour task:\n%s", contextStr, prompt)
 	}
-	
+
 	messages = append(messages, Message{
 		Role:    "user",
 		Content: userMessage,
@@ -241,12 +293,7 @@ func (ac *AgentClient) callAnthropic(ctx context.Context, agent *models.Agent, p
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("anthropic-version", "2023-06-01")
-	
-	// Set authorization header
-	if agent.APIToken != "" {
-		req.Header.Set("x-api-key", agent.APIToken)
-	}
+	ac.setAuthHeaders(req, agent)
 
 	resp, err := ac.client.Do(req)
 	if err != nil {
@@ -344,10 +391,14 @@ func (ac *AgentClient) callGenericCompletion(ctx context.Context, agent *models.
 	}
 
 	// Try different endpoints for completion APIs
+	baseURL := agent.ProviderURL
+	if strings.HasSuffix(baseURL, "/v1") {
+		baseURL = strings.TrimSuffix(baseURL, "/v1")
+	}
+
+	// Try common endpoints for ping
 	endpoints := []string{
-		agent.ProviderURL + "/completions",
-		agent.ProviderURL + "/v1/completions",
-		agent.ProviderURL,
+		baseURL + "/v1/chat/completions",
 	}
 
 	for _, endpoint := range endpoints {
@@ -371,15 +422,20 @@ func (ac *AgentClient) tryEndpoint(ctx context.Context, agent *models.Agent, end
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	if agent.APIToken != "" {
-		req.Header.Set("Authorization", "Bearer "+agent.APIToken)
-	}
+	ac.setAuthHeaders(req, agent)
 
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	fmt.Println("========HIT ENDPOINT===========")
+	fmt.Println("req:", req)
+	fmt.Println("endpoint:", endpoint)
+	fmt.Println("payload:", string(jsonData))
+	fmt.Println("response:", resp)
+	fmt.Println("===================\n\n")
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -471,7 +527,7 @@ func (ac *AgentClient) callGoogle(ctx context.Context, agent *models.Agent, prom
 	})
 
 	reqBody := GoogleRequest{
-		Contents: contents,
+		Contents:          contents,
 		SystemInstruction: systemInstruction,
 		GenerationConfig: struct {
 			Temperature     float64 `json:"temperature"`
@@ -506,11 +562,7 @@ func (ac *AgentClient) callGoogle(ctx context.Context, agent *models.Agent, prom
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	
-	// Set authorization header
-	if agent.APIToken != "" {
-		req.Header.Set("x-goog-api-key", agent.APIToken)
-	}
+	ac.setAuthHeaders(req, agent)
 
 	resp, err := ac.client.Do(req)
 	if err != nil {
@@ -594,11 +646,7 @@ func (ac *AgentClient) callOllama(ctx context.Context, agent *models.Agent, prom
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	
-	// Set authorization header if API token is provided
-	if agent.APIToken != "" {
-		req.Header.Set("Authorization", "Bearer "+agent.APIToken)
-	}
+	ac.setAuthHeaders(req, agent)
 
 	resp, err := ac.client.Do(req)
 	if err != nil {
@@ -642,7 +690,7 @@ func (ac *AgentClient) callOllama(ctx context.Context, agent *models.Agent, prom
 func (ac *AgentClient) callOpenAI(ctx context.Context, agent *models.Agent, prompt string, contextStr string) (*models.AgentResponse, error) {
 	// Build messages array
 	var messages []Message
-	
+
 	// Add system message
 	if contextStr != "" {
 		messages = append(messages, Message{
@@ -676,80 +724,59 @@ func (ac *AgentClient) callOpenAI(ctx context.Context, agent *models.Agent, prom
 		}, err
 	}
 
-	// Determine the endpoint - more flexible for custom providers
-	endpoint := agent.ProviderURL
-	providerType := detectProviderType(agent.ProviderURL)
+	// Determine the endpoint
+	endpoints := ac.getChatEndpoints(agent.ProviderURL)
+	var lastErr error
 	
-	if providerType == "openai" {
-		// OpenAI specific endpoint
-		if !contains(agent.ProviderURL, "/chat") && !contains(agent.ProviderURL, "/completions") {
-			endpoint = agent.ProviderURL + "/v1/chat/completions"
+	for _, endpoint := range endpoints {
+		req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
+		if err != nil {
+			lastErr = err
+			continue
 		}
-	} else if providerType == "custom" {
-		// Custom provider - try different common endpoints
-		if !contains(agent.ProviderURL, "/chat") && !contains(agent.ProviderURL, "/completions") {
-			endpoint = agent.ProviderURL + "/v1/chat/completions"
+
+		req.Header.Set("Content-Type", "application/json")
+		ac.setAuthHeaders(req, agent)
+
+		resp, err := ac.client.Do(req)
+		if err != nil {
+			lastErr = err
+			continue
 		}
-	}
+		defer resp.Body.Close()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
-	if err != nil {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			lastErr = fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+			continue
+		}
+
+		var openaiResp OpenAIResponse
+		if err := json.Unmarshal(body, &openaiResp); err != nil {
+			lastErr = err
+			continue
+		}
+
+		if len(openaiResp.Choices) == 0 {
+			lastErr = fmt.Errorf("no choices in response")
+			continue
+		}
+
 		return &models.AgentResponse{
-			Success:      false,
-			ErrorMessage: fmt.Sprintf("Failed to create request: %v", err),
-		}, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	
-	// Set authorization header if API token is provided
-	if agent.APIToken != "" {
-		req.Header.Set("Authorization", "Bearer "+agent.APIToken)
-	}
-
-	resp, err := ac.client.Do(req)
-	if err != nil {
-		return &models.AgentResponse{
-			Success:      false,
-			ErrorMessage: fmt.Sprintf("Request failed: %v", err),
-		}, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return &models.AgentResponse{
-			Success:      false,
-			ErrorMessage: fmt.Sprintf("Failed to read response: %v", err),
-		}, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return &models.AgentResponse{
-			Success:      false,
-			ErrorMessage: fmt.Sprintf("API returned status %d: %s", resp.StatusCode, string(body)),
-		}, fmt.Errorf("API error: status %d", resp.StatusCode)
-	}
-
-	var openaiResp OpenAIResponse
-	if err := json.Unmarshal(body, &openaiResp); err != nil {
-		return &models.AgentResponse{
-			Success:      false,
-			ErrorMessage: fmt.Sprintf("Failed to unmarshal response: %v", err),
-		}, err
-	}
-
-	if len(openaiResp.Choices) == 0 {
-		return &models.AgentResponse{
-			Success:      false,
-			ErrorMessage: "No choices returned from API",
-		}, fmt.Errorf("no choices in response")
+			Success: true,
+			Content: openaiResp.Choices[0].Message.Content,
+		}, nil
 	}
 
 	return &models.AgentResponse{
-		Success: true,
-		Content: openaiResp.Choices[0].Message.Content,
-	}, nil
+		Success:      false,
+		ErrorMessage: fmt.Sprintf("Failed to call OpenAI-compatible API: %v", lastErr),
+	}, lastErr
 }
 
 // Ping checks if an agent is reachable
@@ -758,61 +785,34 @@ func (ac *AgentClient) Ping(ctx context.Context, agent *models.Agent) error {
 	defer cancel()
 
 	providerType := detectProviderType(agent.ProviderURL)
-	var endpoint string
 
 	switch providerType {
 	case "ollama":
-		endpoint = agent.ProviderURL + "/api/tags"
+		return ac.pingOllama(timeoutCtx, agent)
 	case "openai":
-		endpoint = agent.ProviderURL + "/models"
-		if !strings.Contains(agent.ProviderURL, "/v1") {
-			endpoint = agent.ProviderURL + "/v1/models"
-		}
+		return ac.pingOpenAI(timeoutCtx, agent)
 	case "anthropic":
-		// Anthropic doesn't have a simple ping endpoint, try to get models
-		endpoint = agent.ProviderURL + "/messages"
-		if !strings.Contains(agent.ProviderURL, "/v1") {
-			endpoint = agent.ProviderURL + "/v1/messages"
-		}
-		// For Anthropic, we'll create a minimal test request instead
 		return ac.pingAnthropic(timeoutCtx, agent)
 	case "google":
-		// Try to list available models
-		endpoint = agent.ProviderURL + "/models"
-		if !strings.Contains(agent.ProviderURL, "generativelanguage.googleapis.com") {
-			endpoint = agent.ProviderURL + "/v1beta/models"
-		}
+		return ac.pingGoogle(timeoutCtx, agent)
+	case "custom":
+		return ac.pingCustom(timeoutCtx, agent)
 	default:
-		// Default to OpenAI-compatible models endpoint
-		endpoint = agent.ProviderURL
-		if !strings.Contains(agent.ProviderURL, "/models") && !strings.Contains(agent.ProviderURL, "/v1") {
-			endpoint = agent.ProviderURL + "/v1/models"
-		}
+		return ac.pingCustom(timeoutCtx, agent)
 	}
+}
 
-	req, err := http.NewRequestWithContext(timeoutCtx, "GET", endpoint, nil)
+// pingOllama handles Ollama-specific ping
+func (ac *AgentClient) pingOllama(ctx context.Context, agent *models.Agent) error {
+	endpoint := agent.ProviderURL + "/api/tags"
+
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	
-	// Set appropriate authorization based on provider
-	switch providerType {
-	case "anthropic":
-		if agent.APIToken != "" {
-			req.Header.Set("x-api-key", agent.APIToken)
-			req.Header.Set("anthropic-version", "2023-06-01")
-		}
-	case "google":
-		if agent.APIToken != "" {
-			req.Header.Set("x-goog-api-key", agent.APIToken)
-		}
-	default:
-		if agent.APIToken != "" {
-			req.Header.Set("Authorization", "Bearer "+agent.APIToken)
-		}
-	}
+	ac.setAuthHeaders(req, agent)
 
 	resp, err := ac.client.Do(req)
 	if err != nil {
@@ -820,16 +820,141 @@ func (ac *AgentClient) Ping(ctx context.Context, agent *models.Agent) error {
 	}
 	defer resp.Body.Close()
 
-	// For Anthropic, we expect 400 (Bad Request) for GET to /messages which means endpoint is reachable
-	if providerType == "anthropic" && resp.StatusCode == http.StatusBadRequest {
-		return nil
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ping returned status %d", resp.StatusCode)
 	}
+
+	return nil
+}
+
+// pingOpenAI handles OpenAI-specific ping
+func (ac *AgentClient) pingOpenAI(ctx context.Context, agent *models.Agent) error {
+	endpoint := agent.ProviderURL + "/models"
+	if !strings.Contains(agent.ProviderURL, "/v1") {
+		endpoint = agent.ProviderURL + "/v1/models"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	ac.setAuthHeaders(req, agent)
+
+	resp, err := ac.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("ping failed: %v", err)
+	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ping returned status %d", resp.StatusCode)
 	}
 
 	return nil
+}
+
+// pingGoogle handles Google Gemini-specific ping
+func (ac *AgentClient) pingGoogle(ctx context.Context, agent *models.Agent) error {
+	endpoint := agent.ProviderURL + "/models"
+	if !strings.Contains(agent.ProviderURL, "generativelanguage.googleapis.com") {
+		endpoint = agent.ProviderURL + "/v1beta/models"
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	ac.setAuthHeaders(req, agent)
+
+	resp, err := ac.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("ping failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ping returned status %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
+// pingCustom handles custom provider ping with simple "hi" message
+func (ac *AgentClient) pingCustom(ctx context.Context, agent *models.Agent) error {
+	// Try simple completion request with "hi"
+	reqBody := map[string]interface{}{
+		"prompt": "hi",
+		"model":  agent.ModelName,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to create ping request: %v", err)
+	}
+
+	// Use unified endpoint detection
+	endpoints := ac.getChatEndpoints(agent.ProviderURL)
+
+	fmt.Printf("Pinging custom provider %s with endpoints: %v\n", agent.Name, endpoints)
+
+	for i, endpoint := range endpoints {
+		fmt.Printf("Trying endpoint %d/%d: %s\n", i+1, len(endpoints), endpoint)
+		success := ac.tryPingEndpoint(ctx, agent, endpoint, jsonData)
+		if success {
+			fmt.Printf("Ping successful on endpoint: %s\n", endpoint)
+			return nil
+		} else {
+			fmt.Printf("Ping failed on endpoint: %s\n", endpoint)
+		}
+	}
+
+	return fmt.Errorf("custom provider ping failed - no endpoints responded")
+}
+
+// tryPingEndpoint attempts to ping an endpoint
+func (ac *AgentClient) tryPingEndpoint(ctx context.Context, agent *models.Agent, endpoint string, jsonData []byte) bool {
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return false
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	ac.setAuthHeaders(req, agent)
+
+	resp, err := ac.client.Do(req)
+	fmt.Println("===================")
+	fmt.Println("Ping req:", req)
+	fmt.Println("Ping endpoint:", endpoint)
+	fmt.Println("Ping response:", resp)
+	fmt.Println("===================\n\n\n")
+
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	// Accept any 2xx status as success
+	return resp.StatusCode >= 200 && resp.StatusCode < 300
+}
+
+// Helper functions
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr ||
+		(len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			findSubstring(s, substr))))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 // pingAnthropic handles Anthropic-specific ping
@@ -857,11 +982,7 @@ func (ac *AgentClient) pingAnthropic(ctx context.Context, agent *models.Agent) e
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("anthropic-version", "2023-06-01")
-	
-	if agent.APIToken != "" {
-		req.Header.Set("x-api-key", agent.APIToken)
-	}
+	ac.setAuthHeaders(req, agent)
 
 	resp, err := ac.client.Do(req)
 	if err != nil {
@@ -875,24 +996,4 @@ func (ac *AgentClient) pingAnthropic(ctx context.Context, agent *models.Agent) e
 	}
 
 	return fmt.Errorf("anthropic ping returned status %d", resp.StatusCode)
-}
-
-// Helper functions
-func isOllamaProvider(url string) bool {
-	return contains(url, "ollama") || !contains(url, "openai")
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || 
-		(len(s) > len(substr) && (s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		findSubstring(s, substr))))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

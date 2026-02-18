@@ -89,9 +89,10 @@
                                     <div class="flex-shrink-0">
                                         <div class="w-8 h-8 {{ if .IsModerator }}bg-purple-500{{ else }}bg-blue-500{{ end }} rounded-full flex items-center justify-center text-white text-sm font-medium">
                                             {{ if .IsModerator }}M{{ else }}
+                                            {{ $logAgentID := .AgentID }}
                                             {{ $agentName := "" }}
                                             {{ range $.Agents }}
-                                                {{ if eq .ID .AgentID }}{{ $agentName = .Name }}{{ end }}
+                                                {{ if eq .ID $logAgentID }}{{ $agentName = .Name }}{{ end }}
                                             {{ end }}
                                             {{ substr $agentName 0 1 | upper }}
                                             {{ end }}
@@ -103,15 +104,17 @@
                                                 <span class="font-medium text-gray-900">
                                                     {{ if .IsModerator }}
                                                         Moderator
-                                                        {{ $moderatorName := "" }}
+                                                        {{ $moderatorName := "Unknown" }}
+                                                        {{ $logAgentID := .AgentID }}
                                                         {{ range $.Agents }}
-                                                            {{ if and $.Discussion.ModeratorID (eq .ID $.Discussion.ModeratorID) }}{{ $moderatorName = .Name }}{{ end }}
+                                                            {{ if eq .ID $logAgentID }}{{ $moderatorName = .Name }}{{ end }}
                                                         {{ end }}
                                                         ({{ $moderatorName }})
                                                     {{ else }}
-                                                        {{ $agentName := "" }}
+                                                        {{ $agentName := "Unknown" }}
+                                                        {{ $logAgentID := .AgentID }}
                                                         {{ range $.Agents }}
-                                                            {{ if eq .ID .AgentID }}{{ $agentName = .Name }}{{ end }}
+                                                            {{ if eq .ID $logAgentID }}{{ $agentName = .Name }}{{ end }}
                                                         {{ end }}
                                                         {{ $agentName }}
                                                     {{ end }}
@@ -164,8 +167,9 @@
                         {{ if .Discussion.ModeratorID }}
                         <div class="mb-4">
                             <h4 class="text-sm font-medium text-gray-700 mb-2">Moderator</h4>
+                            {{ $modID := .Discussion.ModeratorID }}
                             {{ range .Agents }}
-                                {{ if eq .ID $.Discussion.ModeratorID }}
+                                {{ if isModerator .ID $modID }}
                                 <div class="flex items-center space-x-2">
                                     <div class="w-6 h-6 bg-purple-400 rounded-full flex items-center justify-center text-white text-xs font-medium">
                                         M

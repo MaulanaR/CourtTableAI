@@ -55,7 +55,8 @@ func (de *DebateEngine) RunDebate(ctx context.Context, topic string, agentIDs []
 	}
 
 	// Start debate in background goroutine
-	go de.executeDebate(ctx, discussion, agents, moderator)
+	// Use background context so it doesn't get cancelled when HTTP request finishes
+	go de.executeDebate(context.Background(), discussion, agents, moderator)
 
 	return discussion, nil
 }
@@ -73,7 +74,7 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 		de.db.UpdateDiscussion(discussion)
 	}()
 
-	log.Printf("Starting debate for discussion %d with %d agents%s", 
+	log.Printf("Starting debate for discussion %d with %d agents%s",
 		discussion.ID, len(agents), func() string {
 			if moderator != nil {
 				return fmt.Sprintf(" and moderator: %s", moderator.Name)
@@ -101,10 +102,10 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 		for i, agent := range agents {
 			// Build prompt for this agent
 			prompt := de.buildPrompt(discussion.Topic, round, i+1, len(agents))
-			
+
 			// Call the agent
 			response, err := de.agentClient.CallAgent(ctx, agent, prompt, debateContext.String())
-			
+
 			// Log the interaction
 			logEntry := &models.DiscussionLog{
 				DiscussionID: discussion.ID,
@@ -209,9 +210,9 @@ func (de *DebateEngine) buildPrompt(topic string, round int, agentNum int, total
 func (de *DebateEngine) callModerator(ctx context.Context, discussion *models.Discussion, moderator *models.Agent, moderatorType string, contextStr string) bool {
 	// Build moderator prompt based on type
 	prompt := de.buildModeratorPrompt(discussion.Topic, moderatorType, contextStr)
-	
+
 	response, err := de.agentClient.CallAgent(ctx, moderator, prompt, "")
-	
+
 	// Log the moderator interaction
 	logEntry := &models.DiscussionLog{
 		DiscussionID: discussion.ID,
@@ -318,13 +319,13 @@ func (de *DebateEngine) generateSummary(topic string, context string) string {
 		return "No responses were generated during this debate."
 	}
 
-	// For now, create a simple summary. In a production system, 
+	// For now, create a simple summary. In a production system,
 	// you might want to use another AI call to generate a better summary
 	summary := fmt.Sprintf("Debate Summary for: %s\n\n", topic)
 	summary += "The debate involved multiple AI agents discussing this topic. "
 	summary += "Each agent provided their perspective and responded to others' arguments. "
 	summary += "For detailed discussion, please review the individual agent responses.\n\n"
-	
+
 	// Add first few lines of actual discussion as preview
 	lines := strings.Split(context, "\n")
 	if len(lines) > 5 {

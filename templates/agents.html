@@ -51,6 +51,11 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                                 </svg>
                             </button>
+                            <button onclick="duplicateAgent({{ .ID }})" class="text-green-600 hover:text-green-900" title="Duplicate Agent">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                </svg>
+                            </button>
                             <button onclick="deleteAgent({{ .ID }})" class="text-red-600 hover:text-red-900">
                                 <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -305,6 +310,46 @@
                 .catch(error => {
                     console.error('Error fetching agent:', error);
                     alert('Failed to load agent data');
+                });
+        }
+
+        function duplicateAgent(id) {
+            fetch(`/api/agents/${id}`)
+                .then(response => response.json())
+                .then(agent => {
+                    // Remove ID to create new agent
+                    delete agent.id;
+                    // Add " - Copy" to name to indicate it's a duplicate
+                    agent.name = agent.name + " - Copy";
+                    
+                    // Set provider type based on URL detection
+                    const providerType = detectProviderType(agent.provider_url);
+                    agent.provider_type = providerType;
+                    
+                    // Show modal with duplicated data
+                    document.getElementById('modalTitle').textContent = 'Duplicate Agent';
+                    
+                    // Populate form with duplicated data
+                    document.getElementById('agentId').value = '';
+                    document.getElementById('name').value = agent.name;
+                    document.getElementById('provider_url').value = agent.provider_url;
+                    document.getElementById('api_token').value = agent.api_token;
+                    document.getElementById('model_name').value = agent.model_name;
+                    document.getElementById('timeout_seconds').value = agent.timeout_seconds;
+                    
+                    // Set provider type and update UI
+                    document.getElementById('provider_type').value = agent.provider_type;
+                    updateProviderUrl();
+                    
+                    // Override with actual values
+                    document.getElementById('provider_url').value = agent.provider_url;
+                    document.getElementById('model_name').value = agent.model_name;
+                    
+                    document.getElementById('agentModal').classList.remove('hidden');
+                })
+                .catch(error => {
+                    console.error('Error fetching agent for duplication:', error);
+                    alert('Failed to load agent data for duplication');
                 });
         }
 

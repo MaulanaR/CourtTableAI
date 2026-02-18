@@ -168,7 +168,34 @@ func (h *AgentHandler) DeleteAgent(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// PingAgent handles POST /api/agents/:id/ping
+// DuplicateAgent handles POST /api/agents/:id/duplicate
+func (h *AgentHandler) DuplicateAgent(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid agent ID"})
+	}
+
+	// Get original agent
+	agent, err := h.db.GetAgent(id)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "Agent not found"})
+	}
+
+	// Create duplicated agent with modified name
+	duplicatedAgent := models.Agent{
+		Name:           agent.Name + " - Copy",
+		ProviderURL:    agent.ProviderURL,
+		APIToken:       agent.APIToken,
+		ModelName:      agent.ModelName,
+		TimeoutSeconds: agent.TimeoutSeconds,
+	}
+
+	if err := h.db.InsertAgent(&duplicatedAgent); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("Failed to duplicate agent: %v", err)})
+	}
+
+	return c.JSON(http.StatusCreated, duplicatedAgent)
+}
 func (h *AgentHandler) PingAgent(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -266,6 +293,20 @@ func (h *DiscussionHandler) StopDiscussion(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "stopped"})
+}
+
+// DeleteDiscussion handles DELETE /api/discussions/:id
+func (h *DiscussionHandler) DeleteDiscussion(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid discussion ID"})
+	}
+
+	if err := h.db.DeleteDiscussion(id); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("Failed to delete discussion: %v", err)})
+	}
+
+	return c.NoContent(http.StatusNoContent)
 }
 
 // RetryAgent handles POST /api/discussions/:id/retry/:agentId

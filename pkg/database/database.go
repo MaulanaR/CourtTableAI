@@ -52,7 +52,7 @@ func (db *DB) CreateTables() error {
 	CREATE TABLE IF NOT EXISTS discussions (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		topic TEXT NOT NULL,
-		final_summary TEXT,
+		final_summary TEXT NOT NULL DEFAULT '',
 		status TEXT DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
 		agent_ids TEXT NOT NULL,
 		moderator_id INTEGER,
@@ -71,7 +71,7 @@ func (db *DB) CreateTables() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		discussion_id INTEGER NOT NULL,
 		agent_id INTEGER NOT NULL,
-		content TEXT,
+		content TEXT NOT NULL DEFAULT '',
 		status TEXT NOT NULL CHECK (status IN ('success', 'timeout', 'error')),
 		response_time INTEGER DEFAULT 0,
 		is_moderator BOOLEAN DEFAULT FALSE,
@@ -100,6 +100,16 @@ func (db *DB) CreateTables() error {
 	}
 
 	log.Println("Database tables created successfully")
+
+	// Ensure new columns exist (Migration)
+	// We use individual Exec calls and ignore errors because SQLite doesn't support 'IF NOT EXISTS' for columns
+	db.Exec("ALTER TABLE discussions ADD COLUMN moderator_id INTEGER")
+	db.Exec("ALTER TABLE discussion_logs ADD COLUMN is_moderator BOOLEAN DEFAULT FALSE")
+	
+	// Ensure these columns are NOT NULL for stability
+	db.Exec("UPDATE discussions SET final_summary = '' WHERE final_summary IS NULL")
+	db.Exec("UPDATE discussion_logs SET content = '' WHERE content IS NULL")
+
 	return nil
 }
 
@@ -256,7 +266,7 @@ func (db *DB) InsertDiscussion(discussion *models.Discussion) error {
 // GetDiscussion retrieves a discussion by ID
 func (db *DB) GetDiscussion(id int64) (*models.Discussion, error) {
 	query := `
-	SELECT id, topic, final_summary, status, agent_ids, moderator_id, created_at, updated_at
+	SELECT id, topic, COALESCE(final_summary, ''), status, agent_ids, moderator_id, created_at, updated_at
 	FROM discussions WHERE id = ?
 	`
 	
@@ -280,7 +290,7 @@ func (db *DB) GetDiscussion(id int64) (*models.Discussion, error) {
 // GetAllDiscussions retrieves all discussions
 func (db *DB) GetAllDiscussions() ([]*models.Discussion, error) {
 	query := `
-	SELECT id, topic, final_summary, status, agent_ids, moderator_id, created_at, updated_at
+	SELECT id, topic, COALESCE(final_summary, ''), status, agent_ids, moderator_id, created_at, updated_at
 	FROM discussions ORDER BY created_at DESC
 	`
 	
@@ -333,7 +343,7 @@ func (db *DB) InsertDiscussionLog(log *models.DiscussionLog) error {
 // GetDiscussionLogs retrieves all logs for a discussion
 func (db *DB) GetDiscussionLogs(discussionID int64) ([]*models.DiscussionLog, error) {
 	query := `
-	SELECT id, discussion_id, agent_id, content, status, response_time, is_moderator, created_at
+	SELECT id, discussion_id, agent_id, COALESCE(content, ''), status, response_time, is_moderator, created_at
 	FROM discussion_logs WHERE discussion_id = ? ORDER BY created_at ASC
 	`
 	
@@ -372,6 +382,27 @@ func (db *DB) UpdateDiscussion(discussion *models.Discussion) error {
 		discussion.Status, discussion.AgentIDs, discussion.ModeratorID, discussion.UpdatedAt, discussion.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update discussion: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("discussion not found")
+	}
+
+	return nil
+}
+
+// DeleteDiscussion deletes a discussion by ID
+func (db *DB) DeleteDiscussion(id int64) error {
+	query := `DELETE FROM discussions WHERE id = ?`
+	
+	result, err := db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete discussion: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()

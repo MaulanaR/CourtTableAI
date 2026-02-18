@@ -23,27 +23,11 @@ func (t *TemplateRenderer) Render(w io.Writer, name string, data interface{}, c 
 
 func loadTemplates() *template.Template {
 	templ := template.New("").Funcs(template.FuncMap{
-		"len": func(v interface{}) int {
-			switch val := v.(type) {
-			case []interface{}:
-				return len(val)
-			case string:
-				return len(val)
-			case []string:
-				return len(val)
-			case []int64:
-				return len(val)
-			case map[string]interface{}:
-				return len(val)
-			default:
-				return 0
-			}
-		},
 		"substr": func(s string, start int, length ...int) string {
 			if start < 0 {
 				start = 0
 			}
-			if start >= len(s) {
+			if len(s) == 0 || start >= len(s) {
 				return ""
 			}
 			end := len(s)
@@ -54,34 +38,6 @@ func loadTemplates() *template.Template {
 		},
 		"upper": func(s string) string {
 			return strings.ToUpper(s)
-		},
-		"eq": func(a, b interface{}) bool {
-			return a == b
-		},
-		"ne": func(a, b interface{}) bool {
-			return a != b
-		},
-		"gt": func(a, b interface{}) bool {
-			switch a.(type) {
-			case int:
-				return a.(int) > b.(int)
-			case int64:
-				return a.(int64) > b.(int64)
-			case float64:
-				return a.(float64) > b.(float64)
-			}
-			return false
-		},
-		"lt": func(a, b interface{}) bool {
-			switch a.(type) {
-			case int:
-				return a.(int) < b.(int)
-			case int64:
-				return a.(int64) < b.(int64)
-			case float64:
-				return a.(float64) < b.(float64)
-			}
-			return false
 		},
 		"getProviderType": func(url string) string {
 			if strings.Contains(url, "openai.com") {
@@ -95,6 +51,12 @@ func loadTemplates() *template.Template {
 			} else {
 				return "Custom"
 			}
+		},
+		"isModerator": func(agentID int64, moderatorID *int64) bool {
+			if moderatorID == nil {
+				return false
+			}
+			return agentID == *moderatorID
 		},
 	})
 
@@ -141,7 +103,7 @@ func main() {
 
 	// API Routes
 	api := e.Group("/api")
-	
+
 	// Agent routes
 	api.POST("/agents", agentHandler.CreateAgent)
 	api.GET("/agents", agentHandler.GetAgents)
@@ -149,12 +111,14 @@ func main() {
 	api.PUT("/agents/:id", agentHandler.UpdateAgent)
 	api.DELETE("/agents/:id", agentHandler.DeleteAgent)
 	api.POST("/agents/:id/ping", agentHandler.PingAgent)
+	api.POST("/agents/:id/duplicate", agentHandler.DuplicateAgent)
 
 	// Discussion routes
 	api.POST("/discussions", discussionHandler.CreateDiscussion)
 	api.GET("/discussions", discussionHandler.GetDiscussions)
 	api.GET("/discussions/:id", discussionHandler.GetDiscussion)
 	api.POST("/discussions/:id/stop", discussionHandler.StopDiscussion)
+	api.DELETE("/discussions/:id", discussionHandler.DeleteDiscussion)
 	api.POST("/discussions/:id/retry/:agentId", discussionHandler.RetryAgent)
 
 	// SSE routes
@@ -167,8 +131,8 @@ func main() {
 	e.GET("/discussions/:id", pageHandler.DiscussionDetail)
 
 	// Start server
-	log.Println("Starting server on :8080")
-	if err := e.Start(":8080"); err != nil {
+	log.Println("Starting server on :8880")
+	if err := e.Start(":8880"); err != nil {
 		log.Fatal("Failed to start server:", err)
 	}
 }
