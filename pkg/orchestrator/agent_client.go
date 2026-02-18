@@ -302,6 +302,9 @@ func (ac *AgentClient) callAnthropic(ctx context.Context, agent *models.Agent, p
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
+	// Log request
+	ac.logInteraction(req, jsonData, nil, nil)
+
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return &models.AgentResponse{
@@ -312,6 +315,9 @@ func (ac *AgentClient) callAnthropic(ctx context.Context, agent *models.Agent, p
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
+	// Log response
+	ac.logInteraction(req, nil, resp, body)
+
 	if err != nil {
 		return &models.AgentResponse{
 			Success:      false,
@@ -431,20 +437,19 @@ func (ac *AgentClient) tryEndpoint(ctx context.Context, agent *models.Agent, end
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
+	// Log request
+	ac.logInteraction(req, jsonData, nil, nil)
+
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	fmt.Println("========HIT ENDPOINT===========")
-	fmt.Println("req:", req)
-	fmt.Println("endpoint:", endpoint)
-	fmt.Println("payload:", string(jsonData))
-	fmt.Println("response:", resp)
-	fmt.Println("===================\n\n")
-
 	body, err := io.ReadAll(resp.Body)
+	// Log response
+	ac.logInteraction(req, nil, resp, body)
+
 	if err != nil {
 		return nil, err
 	}
@@ -571,6 +576,9 @@ func (ac *AgentClient) callGoogle(ctx context.Context, agent *models.Agent, prom
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
+	// Log request
+	ac.logInteraction(req, jsonData, nil, nil)
+
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return &models.AgentResponse{
@@ -581,6 +589,9 @@ func (ac *AgentClient) callGoogle(ctx context.Context, agent *models.Agent, prom
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
+	// Log response
+	ac.logInteraction(req, nil, resp, body)
+
 	if err != nil {
 		return &models.AgentResponse{
 			Success:      false,
@@ -655,6 +666,9 @@ func (ac *AgentClient) callOllama(ctx context.Context, agent *models.Agent, prom
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
+	// Log request
+	ac.logInteraction(req, jsonData, nil, nil)
+
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return &models.AgentResponse{
@@ -665,6 +679,9 @@ func (ac *AgentClient) callOllama(ctx context.Context, agent *models.Agent, prom
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
+	// Log response
+	ac.logInteraction(req, nil, resp, body)
+
 	if err != nil {
 		return &models.AgentResponse{
 			Success:      false,
@@ -745,6 +762,9 @@ func (ac *AgentClient) callOpenAI(ctx context.Context, agent *models.Agent, prom
 		req.Header.Set("Content-Type", "application/json")
 		ac.setAuthHeaders(req, agent)
 
+		// Log request
+		ac.logInteraction(req, jsonData, nil, nil)
+
 		resp, err := ac.client.Do(req)
 		if err != nil {
 			lastErr = err
@@ -753,6 +773,9 @@ func (ac *AgentClient) callOpenAI(ctx context.Context, agent *models.Agent, prom
 		defer resp.Body.Close()
 
 		body, err := io.ReadAll(resp.Body)
+		// Log response
+		ac.logInteraction(req, nil, resp, body)
+
 		if err != nil {
 			lastErr = err
 			continue
@@ -864,11 +887,17 @@ func (ac *AgentClient) pingOllama(ctx context.Context, agent *models.Agent) erro
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
+	// Log request
+	ac.logInteraction(req, nil, nil, nil)
+
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("ping failed: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// Log response
+	ac.logInteraction(req, nil, resp, nil)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ping returned status %d", resp.StatusCode)
@@ -892,11 +921,17 @@ func (ac *AgentClient) pingOpenAI(ctx context.Context, agent *models.Agent) erro
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
+	// Log request
+	ac.logInteraction(req, nil, nil, nil)
+
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("ping failed: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// Log response
+	ac.logInteraction(req, nil, resp, nil)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ping returned status %d", resp.StatusCode)
@@ -920,11 +955,17 @@ func (ac *AgentClient) pingGoogle(ctx context.Context, agent *models.Agent) erro
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
+	// Log request
+	ac.logInteraction(req, nil, nil, nil)
+
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("ping failed: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// Log response
+	ac.logInteraction(req, nil, resp, nil)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ping returned status %d", resp.StatusCode)
@@ -975,17 +1016,15 @@ func (ac *AgentClient) tryPingEndpoint(ctx context.Context, agent *models.Agent,
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
-	resp, err := ac.client.Do(req)
-	fmt.Println("===================")
-	fmt.Println("Ping req:", req)
-	fmt.Println("Ping endpoint:", endpoint)
-	fmt.Println("Ping response:", resp)
-	fmt.Println("===================\n\n\n")
+	ac.logInteraction(req, jsonData, nil, nil)
 
+	resp, err := ac.client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer resp.Body.Close()
+
+	ac.logInteraction(req, nil, resp, nil)
 
 	// Accept any 2xx status as success
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
@@ -1034,11 +1073,17 @@ func (ac *AgentClient) pingAnthropic(ctx context.Context, agent *models.Agent) e
 	req.Header.Set("Content-Type", "application/json")
 	ac.setAuthHeaders(req, agent)
 
+	// Log request
+	ac.logInteraction(req, jsonData, nil, nil)
+
 	resp, err := ac.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("anthropic ping failed: %v", err)
 	}
 	defer resp.Body.Close()
+
+	// Log response
+	ac.logInteraction(req, nil, resp, nil)
 
 	// Accept 200 or 400 (invalid model) as success
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusBadRequest {
@@ -1046,4 +1091,37 @@ func (ac *AgentClient) pingAnthropic(ctx context.Context, agent *models.Agent) e
 	}
 
 	return fmt.Errorf("anthropic ping returned status %d", resp.StatusCode)
+}
+
+// logInteraction logs the details of an API call
+func (ac *AgentClient) logInteraction(req *http.Request, reqBody []byte, resp *http.Response, respBody []byte) {
+	fmt.Println("\n================= AGENT API CALL =================")
+	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
+	fmt.Printf("Method: %s\n", req.Method)
+	fmt.Printf("URL: %s\n", req.URL.String())
+	
+	// Print Headers (masked auth)
+	fmt.Println("Headers:")
+	for k, v := range req.Header {
+		if strings.EqualFold(k, "Authorization") || strings.EqualFold(k, "x-api-key") || strings.EqualFold(k, "x-goog-api-key") {
+			fmt.Printf("  %s: [REDACTED]\n", k)
+		} else {
+			fmt.Printf("  %s: %v\n", k, v)
+		}
+	}
+
+	if len(reqBody) > 0 {
+		fmt.Printf("Request Body:\n%s\n", string(reqBody))
+	}
+
+	if resp != nil {
+		fmt.Printf("Response Status: %s\n", resp.Status)
+		if len(respBody) > 0 {
+			// Limit response body log size if needed, but user asked for "req and response", implying full
+			fmt.Printf("Response Body:\n%s\n", string(respBody))
+		}
+	} else {
+		fmt.Println("Response: <nil>")
+	}
+	fmt.Println("==================================================")
 }
