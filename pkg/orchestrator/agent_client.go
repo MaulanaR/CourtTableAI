@@ -149,8 +149,11 @@ func (ac *AgentClient) CallAgent(ctx context.Context, agent *models.Agent, promp
 	var response *models.AgentResponse
 	var err error
 
-	// Determine provider type and call appropriate method
-	providerType := detectProviderType(agent.ProviderURL)
+	// Use the provider type from the database
+	providerType := agent.ProviderType
+	if providerType == "" {
+		providerType = detectProviderType(agent.ProviderURL)
+	}
 
 	fmt.Printf("Calling agent %s (%s) with timeout %v\n", agent.Name, providerType, timeoutDuration)
 
@@ -184,7 +187,11 @@ func (ac *AgentClient) CallAgent(ctx context.Context, agent *models.Agent, promp
 
 // setAuthHeaders ensures consistent header setting across all methods
 func (ac *AgentClient) setAuthHeaders(req *http.Request, agent *models.Agent) {
-	providerType := detectProviderType(agent.ProviderURL)
+	providerType := agent.ProviderType
+	if providerType == "" {
+		providerType = detectProviderType(agent.ProviderURL)
+	}
+	
 	token := strings.TrimSpace(agent.APIToken)
 	if token == "" {
 		return
@@ -756,21 +763,61 @@ func (ac *AgentClient) callOpenAI(ctx context.Context, agent *models.Agent, prom
 			continue
 		}
 
+		// Try standard OpenAI response first
 		var openaiResp OpenAIResponse
-		if err := json.Unmarshal(body, &openaiResp); err != nil {
-			lastErr = err
-			continue
+		if err := json.Unmarshal(body, &openaiResp); err == nil && len(openaiResp.Choices) > 0 {
+			content := openaiResp.Choices[0].Message.Content
+			if content != "" {
+				return &models.AgentResponse{
+					Success: true,
+					Content: content,
+				}, nil
+			}
 		}
 
-		if len(openaiResp.Choices) == 0 {
-			lastErr = fmt.Errorf("no choices in response")
-			continue
+		// Fallback: Try generic parsing if strict OpenAI struct failed or had no choices
+		// This handles cases where API returns 200 OK but different JSON structure
+		var result map[string]interface{}
+		if err := json.Unmarshal(body, &result); err == nil {
+			// Check for direct error in JSON
+			if errMsg, ok := result["error"].(string); ok {
+				lastErr = fmt.Errorf("API error in JSON: %s", errMsg)
+				continue
+			}
+			if errObj, ok := result["error"].(map[string]interface{}); ok {
+				if msg, ok := errObj["message"].(string); ok {
+					lastErr = fmt.Errorf("API error in JSON: %s", msg)
+					continue
+				}
+			}
+
+			// Try to extract content from common fields
+			content := ""
+			if text, ok := result["text"].(string); ok {
+				content = text
+			} else if response, ok := result["response"].(string); ok {
+				content = response
+			} else if choices, ok := result["choices"].([]interface{}); ok && len(choices) > 0 {
+				if choice, ok := choices[0].(map[string]interface{}); ok {
+					if message, ok := choice["message"].(map[string]interface{}); ok {
+						if text, ok := message["content"].(string); ok {
+							content = text
+						}
+					} else if text, ok := choice["text"].(string); ok {
+						content = text
+					}
+				}
+			}
+
+			if content != "" {
+				return &models.AgentResponse{
+					Success: true,
+					Content: content,
+				}, nil
+			}
 		}
 
-		return &models.AgentResponse{
-			Success: true,
-			Content: openaiResp.Choices[0].Message.Content,
-		}, nil
+		lastErr = fmt.Errorf("failed to parse response body: %s", string(body))
 	}
 
 	return &models.AgentResponse{
@@ -781,10 +828,13 @@ func (ac *AgentClient) callOpenAI(ctx context.Context, agent *models.Agent, prom
 
 // Ping checks if an agent is reachable
 func (ac *AgentClient) Ping(ctx context.Context, agent *models.Agent) error {
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	providerType := detectProviderType(agent.ProviderURL)
+	providerType := agent.ProviderType
+	if providerType == "" {
+		providerType = detectProviderType(agent.ProviderURL)
+	}
 
 	switch providerType {
 	case "ollama":

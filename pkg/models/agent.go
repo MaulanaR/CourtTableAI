@@ -10,6 +10,7 @@ import (
 type Agent struct {
 	ID            int64     `json:"id" db:"id"`
 	Name          string    `json:"name" db:"name"`
+	ProviderType  string    `json:"provider_type" db:"provider_type"` // ollama, openai, anthropic, google, custom
 	ProviderURL   string    `json:"provider_url" db:"provider_url"`
 	APIToken      string    `json:"api_token" db:"api_token"`
 	ModelName     string    `json:"model_name" db:"model_name"`

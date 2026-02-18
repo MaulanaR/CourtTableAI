@@ -14,6 +14,8 @@ import (
 type DebateEngine struct {
 	db          *database.DB
 	agentClient *AgentClient
+	subscribers map[int64][]chan interface{}
+	subMu       sync.RWMutex
 }
 
 // NewDebateEngine creates a new debate engine
@@ -21,12 +23,66 @@ func NewDebateEngine(db *database.DB) *DebateEngine {
 	return &DebateEngine{
 		db:          db,
 		agentClient: NewAgentClient(),
+		subscribers: make(map[int64][]chan interface{}),
+	}
+}
+
+// Subscribe adds a subscriber for a discussion
+func (de *DebateEngine) Subscribe(discussionID int64) chan interface{} {
+	de.subMu.Lock()
+	defer de.subMu.Unlock()
+
+	ch := make(chan interface{}, 10)
+	de.subscribers[discussionID] = append(de.subscribers[discussionID], ch)
+	return ch
+}
+
+// Unsubscribe removes a subscriber
+func (de *DebateEngine) Unsubscribe(discussionID int64, ch chan interface{}) {
+	de.subMu.Lock()
+	defer de.subMu.Unlock()
+
+	subs := de.subscribers[discussionID]
+	for i, sub := range subs {
+		if sub == ch {
+			de.subscribers[discussionID] = append(subs[:i], subs[i+1:]...)
+			close(ch)
+			break
+		}
+	}
+}
+
+// broadcast sends an update to all subscribers of a discussion
+func (de *DebateEngine) broadcast(discussionID int64, data interface{}) {
+	de.subMu.RLock()
+	defer de.subMu.RUnlock()
+
+	for _, ch := range de.subscribers[discussionID] {
+		select {
+		case ch <- data:
+		default:
+			// Buffer full, skip
+		}
 	}
 }
 
 // RunDebate starts a debate session with the specified topic and agents
 func (de *DebateEngine) RunDebate(ctx context.Context, topic string, agentIDs []int64, moderatorID *int64) (*models.Discussion, error) {
-	// Create discussion record
+	// 1. Verify agents exist BEFORE creating discussion
+	agents, err := de.getAgents(agentIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to verify agents: %w", err)
+	}
+
+	var moderator *models.Agent
+	if moderatorID != nil {
+		moderator, err = de.db.GetAgent(*moderatorID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to verify moderator: %w", err)
+		}
+	}
+
+	// 2. Create discussion record
 	discussion := &models.Discussion{
 		Topic:       topic,
 		Status:      "running",
@@ -38,23 +94,7 @@ func (de *DebateEngine) RunDebate(ctx context.Context, topic string, agentIDs []
 		return nil, fmt.Errorf("failed to create discussion: %w", err)
 	}
 
-	// Get agent details
-	agents, err := de.getAgents(agentIDs)
-	if err != nil {
-		discussion.Status = "failed"
-		de.db.UpdateDiscussion(discussion)
-		return nil, fmt.Errorf("failed to get agents: %w", err)
-	}
-
-	var moderator *models.Agent
-	if moderatorID != nil {
-		moderator, err = de.db.GetAgent(*moderatorID)
-		if err != nil {
-			log.Printf("Warning: Failed to get moderator agent %d: %v", *moderatorID, err)
-		}
-	}
-
-	// Start debate in background goroutine
+	// 3. Start debate in background goroutine
 	// Use background context so it doesn't get cancelled when HTTP request finishes
 	go de.executeDebate(context.Background(), discussion, agents, moderator)
 
@@ -140,6 +180,9 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 			// Save the log entry
 			if err := de.db.InsertDiscussionLog(logEntry); err != nil {
 				log.Printf("Failed to save discussion log: %v", err)
+			} else {
+				// Broadcast the new log
+				de.broadcast(discussion.ID, logEntry)
 			}
 
 			// Moderator provides commentary between agent responses if available
@@ -178,6 +221,9 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 	discussion.FinalSummary = summary
 	discussion.Status = "completed"
 	de.db.UpdateDiscussion(discussion)
+
+	// Broadcast discussion update
+	de.broadcast(discussion.ID, discussion)
 
 	log.Printf("Debate completed for discussion %d", discussion.ID)
 }
@@ -238,6 +284,9 @@ func (de *DebateEngine) callModerator(ctx context.Context, discussion *models.Di
 	// Save the moderator log entry
 	if err := de.db.InsertDiscussionLog(logEntry); err != nil {
 		log.Printf("Failed to save moderator log: %v", err)
+	} else {
+		// Broadcast the moderator log
+		de.broadcast(discussion.ID, logEntry)
 	}
 
 	return logEntry.Status == "success"

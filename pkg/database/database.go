@@ -16,6 +16,13 @@ type DB struct {
 
 // NewDB creates a new database connection
 func NewDB(dataSourceName string) (*DB, error) {
+	// Add WAL mode for better concurrency
+	if !contains(dataSourceName, "?") {
+		dataSourceName += "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+	} else {
+		dataSourceName += "&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
+	}
+
 	db, err := sql.Open("sqlite", dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -28,6 +35,10 @@ func NewDB(dataSourceName string) (*DB, error) {
 	return &DB{db}, nil
 }
 
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && s[0:len(s)] == s
+}
+
 // CreateTables creates all necessary tables for the application
 func (db *DB) CreateTables() error {
 	// Create agents table
@@ -35,6 +46,7 @@ func (db *DB) CreateTables() error {
 	CREATE TABLE IF NOT EXISTS agents (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL UNIQUE,
+		provider_type TEXT NOT NULL DEFAULT 'custom',
 		provider_url TEXT NOT NULL,
 		api_token TEXT NOT NULL,
 		model_name TEXT NOT NULL,
@@ -103,6 +115,7 @@ func (db *DB) CreateTables() error {
 
 	// Ensure new columns exist (Migration)
 	// We use individual Exec calls and ignore errors because SQLite doesn't support 'IF NOT EXISTS' for columns
+	db.Exec("ALTER TABLE agents ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'custom'")
 	db.Exec("ALTER TABLE discussions ADD COLUMN moderator_id INTEGER")
 	db.Exec("ALTER TABLE discussion_logs ADD COLUMN is_moderator BOOLEAN DEFAULT FALSE")
 	
@@ -116,12 +129,12 @@ func (db *DB) CreateTables() error {
 // InsertAgent creates a new agent in the database
 func (db *DB) InsertAgent(agent *models.Agent) error {
 	query := `
-	INSERT INTO agents (name, provider_url, api_token, model_name, timeout_seconds, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO agents (name, provider_type, provider_url, api_token, model_name, timeout_seconds, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	
 	now := time.Now()
-	result, err := db.Exec(query, agent.Name, agent.ProviderURL, agent.APIToken, 
+	result, err := db.Exec(query, agent.Name, agent.ProviderType, agent.ProviderURL, agent.APIToken, 
 		agent.ModelName, agent.TimeoutSeconds, now, now)
 	if err != nil {
 		return fmt.Errorf("failed to insert agent: %w", err)
@@ -141,13 +154,13 @@ func (db *DB) InsertAgent(agent *models.Agent) error {
 // GetAgent retrieves an agent by ID
 func (db *DB) GetAgent(id int64) (*models.Agent, error) {
 	query := `
-	SELECT id, name, provider_url, api_token, model_name, timeout_seconds, created_at, updated_at
+	SELECT id, name, provider_type, provider_url, api_token, model_name, timeout_seconds, created_at, updated_at
 	FROM agents WHERE id = ?
 	`
 	
 	agent := &models.Agent{}
 	err := db.QueryRow(query, id).Scan(
-		&agent.ID, &agent.Name, &agent.ProviderURL, &agent.APIToken,
+		&agent.ID, &agent.Name, &agent.ProviderType, &agent.ProviderURL, &agent.APIToken,
 		&agent.ModelName, &agent.TimeoutSeconds, &agent.CreatedAt, &agent.UpdatedAt,
 	)
 	
@@ -164,7 +177,7 @@ func (db *DB) GetAgent(id int64) (*models.Agent, error) {
 // GetAllAgents retrieves all agents from the database
 func (db *DB) GetAllAgents() ([]*models.Agent, error) {
 	query := `
-	SELECT id, name, provider_url, api_token, model_name, timeout_seconds, created_at, updated_at
+	SELECT id, name, provider_type, provider_url, api_token, model_name, timeout_seconds, created_at, updated_at
 	FROM agents ORDER BY created_at DESC
 	`
 	
@@ -178,7 +191,7 @@ func (db *DB) GetAllAgents() ([]*models.Agent, error) {
 	for rows.Next() {
 		agent := &models.Agent{}
 		err := rows.Scan(
-			&agent.ID, &agent.Name, &agent.ProviderURL, &agent.APIToken,
+			&agent.ID, &agent.Name, &agent.ProviderType, &agent.ProviderURL, &agent.APIToken,
 			&agent.ModelName, &agent.TimeoutSeconds, &agent.CreatedAt, &agent.UpdatedAt,
 		)
 		if err != nil {
@@ -194,12 +207,12 @@ func (db *DB) GetAllAgents() ([]*models.Agent, error) {
 func (db *DB) UpdateAgent(agent *models.Agent) error {
 	query := `
 	UPDATE agents 
-	SET name = ?, provider_url = ?, api_token = ?, model_name = ?, timeout_seconds = ?, updated_at = ?
+	SET name = ?, provider_type = ?, provider_url = ?, api_token = ?, model_name = ?, timeout_seconds = ?, updated_at = ?
 	WHERE id = ?
 	`
 	
 	agent.UpdatedAt = time.Now()
-	result, err := db.Exec(query, agent.Name, agent.ProviderURL, agent.APIToken,
+	result, err := db.Exec(query, agent.Name, agent.ProviderType, agent.ProviderURL, agent.APIToken,
 		agent.ModelName, agent.TimeoutSeconds, agent.UpdatedAt, agent.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update agent: %w", err)

@@ -66,7 +66,7 @@
                     <div class="space-y-2">
                         <div>
                             <span class="text-sm text-gray-500">Provider:</span>
-                            <span class="text-sm text-gray-900 ml-2">{{ getProviderType .ProviderURL }}</span>
+                            <span class="text-sm text-gray-900 ml-2">{{ getProviderDisplay . }}</span>
                         </div>
                         <div>
                             <span class="text-sm text-gray-500">Model:</span>
@@ -217,7 +217,7 @@
             }
         };
 
-        function updateProviderUrl() {
+        function updateProviderUrl(skipValueUpdate) {
             const providerType = document.getElementById('provider_type').value;
             const urlInput = document.getElementById('provider_url');
             const modelInput = document.getElementById('model_name');
@@ -232,13 +232,17 @@
             if (providerType && providerConfigs[providerType]) {
                 const config = providerConfigs[providerType];
                 
-                // Update URL
-                urlInput.value = config.url;
+                // Update URL if not skipping
+                if (!skipValueUpdate) {
+                    urlInput.value = config.url;
+                }
                 helpText.textContent = config.help;
                 
                 // Update model suggestions
                 modelDatalist.innerHTML = config.models.map(model => `<option value="${model}">`).join('');
-                modelInput.placeholder = config.models.length > 0 ? `e.g., ${config.models[0]}` : 'Enter model name';
+                if (!skipValueUpdate) {
+                    modelInput.placeholder = config.models.length > 0 ? `e.g., ${config.models[0]}` : 'Enter model name';
+                }
                 modelHelp.textContent = config.models.length > 0 ? `Available models: ${config.models.slice(0, 3).join(', ')}${config.models.length > 3 ? '...' : ''}` : 'Enter your custom model name';
                 
                 // Update API token requirement indicator
@@ -256,11 +260,13 @@
                     tokenHelp.textContent = 'API token optional for ' + providerType.charAt(0).toUpperCase() + providerType.slice(1);
                 }
             } else {
-                urlInput.value = '';
-                urlInput.placeholder = 'Select provider type';
+                if (!skipValueUpdate) {
+                    urlInput.value = '';
+                    urlInput.placeholder = 'Select provider type';
+                    modelInput.placeholder = 'Select provider type';
+                }
                 helpText.textContent = 'Select a provider type to see recommended URL';
                 modelDatalist.innerHTML = '';
-                modelInput.placeholder = 'Select provider type';
                 modelHelp.textContent = 'Select a provider type to see available models';
                 tokenInput.required = false;
                 tokenInput.placeholder = 'Optional';
@@ -291,17 +297,17 @@
                     document.getElementById('modalTitle').textContent = 'Edit Agent';
                     document.getElementById('agentId').value = agent.id;
                     document.getElementById('name').value = agent.name;
-                    document.getElementById('provider_url').value = agent.provider_url;
                     document.getElementById('api_token').value = agent.api_token;
                     document.getElementById('model_name').value = agent.model_name;
                     document.getElementById('timeout_seconds').value = agent.timeout_seconds;
                     
-                    // Set provider type based on URL
-                    const providerType = detectProviderType(agent.provider_url);
-                    document.getElementById('provider_type').value = providerType;
-                    updateProviderUrl();
+                    // Set provider type
+                    document.getElementById('provider_type').value = agent.provider_type || detectProviderType(agent.provider_url);
                     
-                    // Override with actual values
+                    // Update UI helpers but DO NOT overwrite the specific URL and model
+                    updateProviderUrl(true); 
+                    
+                    // Set the actual values from database
                     document.getElementById('provider_url').value = agent.provider_url;
                     document.getElementById('model_name').value = agent.model_name;
                     
@@ -322,26 +328,20 @@
                     // Add " - Copy" to name to indicate it's a duplicate
                     agent.name = agent.name + " - Copy";
                     
-                    // Set provider type based on URL detection
-                    const providerType = detectProviderType(agent.provider_url);
-                    agent.provider_type = providerType;
-                    
                     // Show modal with duplicated data
                     document.getElementById('modalTitle').textContent = 'Duplicate Agent';
                     
                     // Populate form with duplicated data
                     document.getElementById('agentId').value = '';
                     document.getElementById('name').value = agent.name;
-                    document.getElementById('provider_url').value = agent.provider_url;
                     document.getElementById('api_token').value = agent.api_token;
-                    document.getElementById('model_name').value = agent.model_name;
                     document.getElementById('timeout_seconds').value = agent.timeout_seconds;
                     
                     // Set provider type and update UI
-                    document.getElementById('provider_type').value = agent.provider_type;
-                    updateProviderUrl();
+                    document.getElementById('provider_type').value = agent.provider_type || detectProviderType(agent.provider_url);
+                    updateProviderUrl(true);
                     
-                    // Override with actual values
+                    // Set the actual values from duplicated agent
                     document.getElementById('provider_url').value = agent.provider_url;
                     document.getElementById('model_name').value = agent.model_name;
                     

@@ -3,6 +3,7 @@ package main
 import (
 	"court-table-ai/pkg/database"
 	"court-table-ai/pkg/handlers"
+	"court-table-ai/pkg/models"
 	"court-table-ai/pkg/orchestrator"
 	"html/template"
 	"io"
@@ -39,7 +40,12 @@ func loadTemplates() *template.Template {
 		"upper": func(s string) string {
 			return strings.ToUpper(s)
 		},
-		"getProviderType": func(url string) string {
+		"getProviderDisplay": func(agent *models.Agent) string {
+			if agent.ProviderType != "" {
+				return strings.Title(agent.ProviderType)
+			}
+			// Fallback to old detection if type is missing
+			url := agent.ProviderURL
 			if strings.Contains(url, "openai.com") {
 				return "OpenAI"
 			} else if strings.Contains(url, "anthropic.com") {
@@ -48,9 +54,8 @@ func loadTemplates() *template.Template {
 				return "Google"
 			} else if strings.Contains(url, "localhost:11434") || strings.Contains(url, "ollama") {
 				return "Ollama"
-			} else {
-				return "Custom"
 			}
+			return "Custom"
 		},
 		"isModerator": func(agentID int64, moderatorID *int64) bool {
 			if moderatorID == nil {

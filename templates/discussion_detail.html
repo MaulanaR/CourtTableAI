@@ -222,6 +222,9 @@
     </main>
 
     <script>
+        const discussionId = {{ .Discussion.ID }};
+        const currentStatus = "{{ .Discussion.Status }}";
+
         function stopDiscussion(id) {
             if (confirm('Are you sure you want to stop this discussion?')) {
                 fetch(`/api/discussions/${id}/stop`, {
@@ -250,8 +253,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'retry initiated') {
-                        // Refresh the page to show the new response
-                        setTimeout(() => location.reload(), 2000);
+                        // SSE will handle the update
                     } else {
                         alert('Failed to retry agent: ' + (data.error || 'Unknown error'));
                     }
@@ -263,50 +265,94 @@
             }
         }
 
-        // Auto-refresh for running discussions
-        {{ if eq .Discussion.Status "running" }}
-        let refreshInterval;
-        
-        function startAutoRefresh() {
-            refreshInterval = setInterval(() => {
-                // Check if discussion is still running
-                fetch(`/api/discussions/{{ .Discussion.ID }}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.discussion.status !== 'running') {
-                            clearInterval(refreshInterval);
-                            location.reload();
-                        } else {
-                            // Check for new logs
-                            const currentLogCount = document.querySelectorAll('.agent-response').length;
-                            if (data.logs.length > currentLogCount) {
-                                location.reload();
-                            }
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error checking discussion status:', error);
-                    });
-            }, 5000); // Check every 5 seconds
+        // Setup SSE for real-time updates
+        function setupSSE() {
+            if (currentStatus !== 'running') return;
+
+            const eventSource = new EventSource(`/api/discussions/${discussionId}/stream`);
+
+            eventSource.addEventListener('log', function(e) {
+                const data = JSON.parse(e.data);
+                appendLog(data.log, data.agent);
+            });
+
+            eventSource.addEventListener('discussion', function(e) {
+                const discussion = JSON.parse(e.data);
+                updateDiscussionStatus(discussion);
+                if (discussion.status !== 'running') {
+                    eventSource.close();
+                    setTimeout(() => location.reload(), 3000);
+                }
+            });
+
+            eventSource.onerror = function(err) {
+                console.error('SSE Error:', err);
+                eventSource.close();
+                // Fallback to polling if SSE fails
+                if (currentStatus === 'running') {
+                    setTimeout(setupSSE, 5000);
+                }
+            };
         }
 
-        // Start auto-refresh when page loads
-        startAutoRefresh();
+        function appendLog(log, agent) {
+            // Check if log already exists
+            if (document.querySelector(`[data-log-id="${log.id}"]`)) return;
 
-        // Clean up interval when page unloads
-        window.addEventListener('beforeunload', () => {
-            if (refreshInterval) {
-                clearInterval(refreshInterval);
+            const container = document.getElementById('transcript-container');
+            const placeholder = container.querySelector('.typing-indicator')?.parentElement;
+            if (placeholder) placeholder.remove();
+
+            const logDiv = document.createElement('div');
+            logDiv.className = `p-6 agent-response ${log.is_moderator ? 'bg-blue-50' : ''}`;
+            logDiv.setAttribute('data-log-id', log.id);
+
+            const createdAt = new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+            logDiv.innerHTML = `
+                <div class="flex items-start space-x-3">
+                    <div class="flex-shrink-0">
+                        <div class="w-8 h-8 ${log.is_moderator ? 'bg-purple-500' : 'bg-blue-500'} rounded-full flex items-center justify-center text-white text-sm font-medium">
+                            ${log.is_moderator ? 'M' : agent.initial}
+                        </div>
+                    </div>
+                    <div class="flex-1">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="font-medium text-gray-900">
+                                    ${log.is_moderator ? 'Moderator (' + agent.name + ')' : agent.name}
+                                </span>
+                                <span class="text-sm text-gray-500 ml-2">${createdAt}</span>
+                                ${log.is_moderator ? '<span class="ml-2 px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Moderator</span>' : ''}
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="px-2 py-1 text-xs rounded-full ${log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                    ${log.status}
+                                </span>
+                                <span class="text-xs text-gray-500">${log.response_time}ms</span>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-gray-700 whitespace-pre-wrap">${log.content}</div>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(logDiv);
+            scrollToBottom();
+        }
+
+        function updateDiscussionStatus(discussion) {
+            const statusBadge = document.querySelector('.bg-yellow-100, .bg-green-100, .bg-red-100');
+            if (statusBadge) {
+                statusBadge.textContent = discussion.status;
+                if (discussion.status !== 'running') {
+                    statusBadge.className = 'px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-green-100 text-green-800';
+                    const stopBtn = document.querySelector('button[onclick^="stopDiscussion"]');
+                    if (stopBtn) stopBtn.remove();
+                }
             }
-        });
-        {{ end }}
-
-        // Helper function to get first character (template function equivalent)
-        function getFirstChar(str) {
-            return str.charAt(0).toUpperCase();
         }
 
-        // Scroll to bottom of transcript for new messages
         function scrollToBottom() {
             const container = document.getElementById('transcript-container');
             if (container) {
@@ -314,8 +360,10 @@
             }
         }
 
-        // Scroll to bottom on page load
-        window.addEventListener('load', scrollToBottom);
+        window.addEventListener('load', () => {
+            scrollToBottom();
+            setupSSE();
+        });
     </script>
 </body>
 </html>

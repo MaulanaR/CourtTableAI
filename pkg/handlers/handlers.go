@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -70,6 +71,7 @@ func (h *AgentHandler) CreateAgent(c echo.Context) error {
 	// Convert request to model
 	agent := models.Agent{
 		Name:          req.Name,
+		ProviderType:  req.ProviderType,
 		ProviderURL:   req.ProviderURL,
 		APIToken:      req.APIToken,
 		ModelName:     req.ModelName,
@@ -141,6 +143,7 @@ func (h *AgentHandler) UpdateAgent(c echo.Context) error {
 	agent := models.Agent{
 		ID:            id,
 		Name:          req.Name,
+		ProviderType:  req.ProviderType,
 		ProviderURL:   req.ProviderURL,
 		APIToken:      req.APIToken,
 		ModelName:     req.ModelName,
@@ -184,6 +187,7 @@ func (h *AgentHandler) DuplicateAgent(c echo.Context) error {
 	// Create duplicated agent with modified name
 	duplicatedAgent := models.Agent{
 		Name:           agent.Name + " - Copy",
+		ProviderType:   agent.ProviderType,
 		ProviderURL:    agent.ProviderURL,
 		APIToken:       agent.APIToken,
 		ModelName:      agent.ModelName,
@@ -354,26 +358,50 @@ func (h *SSEHandler) StreamDiscussion(c echo.Context) error {
 	c.Response().Header().Set("Connection", "keep-alive")
 	c.Response().Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Get initial discussion status
-	discussion, logs, err := h.debateEngine.GetDiscussionStatus(id)
-	if err != nil {
-		return c.JSON(http.StatusNotFound, map[string]string{"error": "Discussion not found"})
-	}
+	// Subscribe to discussion updates
+	updateChan := h.debateEngine.Subscribe(id)
+	defer h.debateEngine.Unsubscribe(id, updateChan)
 
-	// Send initial data
-	h.sendSSEUpdate(c.Response(), "discussion", discussion)
-	h.sendSSEUpdate(c.Response(), "logs", logs)
+	// Context for disconnection
+	ctx := c.Request().Context()
 
-	// For a complete implementation, you'd want to:
-	// 1. Keep the connection open
-	// 2. Poll for changes or use a notification system
-	// 3. Send updates when new logs are added
-	// 4. Handle client disconnection
-
-	// For now, we'll just send a completion message
+	// Initial status message
 	h.sendSSEUpdate(c.Response(), "status", map[string]string{"message": "Streaming started"})
 
-	return nil
+	// Listen for updates or disconnection
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case update := <-updateChan:
+			var eventType string
+			switch v := update.(type) {
+			case *models.DiscussionLog:
+				eventType = "log"
+				// Add agent name to log for UI
+				agent, _ := h.db.GetAgent(v.AgentID)
+				if agent != nil {
+					// We can't modify the struct easily if it's a pointer to a shared one, 
+					// but here it's fine as we broadcasted a new one.
+					// Actually, let's wrap it in a map to include extra info.
+					update = map[string]interface{}{
+						"log": v,
+						"agent": map[string]string{
+							"name": agent.Name,
+							"initial": strings.ToUpper(agent.Name[:1]),
+						},
+					}
+				}
+			case *models.Discussion:
+				eventType = "discussion"
+			default:
+				eventType = "update"
+			}
+			if err := h.sendSSEUpdate(c.Response(), eventType, update); err != nil {
+				return nil
+			}
+		}
+	}
 }
 
 func (h *SSEHandler) sendSSEUpdate(resp *echo.Response, eventType string, data interface{}) error {
