@@ -3,6 +3,8 @@ package models
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -27,6 +29,9 @@ type Discussion struct {
 	Status       string             `json:"status" db:"status"` // running, completed, failed
 	AgentIDs     JSONSlice[int64]   `json:"agent_ids" db:"agent_ids"`
 	ModeratorID  *int64             `json:"moderator_id" db:"moderator_id"` // nullable
+	MaxRounds    int                `json:"max_rounds" db:"max_rounds"`
+	Language     string             `json:"language" db:"language"`
+	MaxCharLimit int                `json:"max_char_limit" db:"max_char_limit"`
 	CreatedAt    time.Time          `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time          `json:"updated_at" db:"updated_at"`
 }
@@ -56,13 +61,52 @@ func (j *JSONSlice[T]) Scan(value interface{}) error {
 		return nil
 	}
 	
+	var data []byte
 	switch v := value.(type) {
 	case []byte:
-		return json.Unmarshal(v, j)
+		data = v
 	case string:
-		return json.Unmarshal([]byte(v), j)
+		data = []byte(v)
+	default:
+		return fmt.Errorf("unexpected type for JSONSlice: %T", value)
 	}
-	return nil
+
+	if len(data) == 0 {
+		*j = JSONSlice[T]{}
+		return nil
+	}
+
+	// Try to unmarshal as JSON
+	err := json.Unmarshal(data, j)
+	if err == nil {
+		return nil
+	}
+
+	// Fallback for legacy or malformed data: try to parse as comma-separated if it's not valid JSON
+	// This is a safety measure to prevent Internal Server Errors on older records
+	strData := string(data)
+	if !strings.HasPrefix(strData, "[") {
+		parts := strings.Split(strData, ",")
+		var result []T
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			var val T
+			// Use JSON to convert the string to the target type T if possible
+			// This works for basic types like int64 or string
+			if err := json.Unmarshal([]byte(fmt.Sprintf("%q", p)), &val); err == nil {
+				result = append(result, val)
+			} else if err := json.Unmarshal([]byte(p), &val); err == nil {
+				result = append(result, val)
+			}
+		}
+		*j = result
+		return nil
+	}
+
+	return fmt.Errorf("failed to unmarshal JSONSlice: %w", err)
 }
 
 // AgentRequest represents a request to an AI agent

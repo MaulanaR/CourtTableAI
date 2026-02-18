@@ -229,9 +229,12 @@ func NewDiscussionHandler(db *database.DB, debateEngine *orchestrator.DebateEngi
 // CreateDiscussion handles POST /api/discussions
 func (h *DiscussionHandler) CreateDiscussion(c echo.Context) error {
 	var request struct {
-		Topic       string  `json:"topic"`
-		AgentIDs    []int64 `json:"agent_ids"`
-		ModeratorID *int64  `json:"moderator_id"`
+		Topic        string  `json:"topic"`
+		AgentIDs     []int64 `json:"agent_ids"`
+		ModeratorID  *int64  `json:"moderator_id"`
+		MaxRounds    int     `json:"max_rounds"`
+		Language     string  `json:"language"`
+		MaxCharLimit int     `json:"max_char_limit"`
 	}
 
 	if err := c.Bind(&request); err != nil {
@@ -247,7 +250,18 @@ func (h *DiscussionHandler) CreateDiscussion(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "at least one agent is required"})
 	}
 
-	discussion, err := h.debateEngine.RunDebate(c.Request().Context(), request.Topic, request.AgentIDs, request.ModeratorID)
+	// Set defaults if not provided
+	if request.MaxRounds <= 0 {
+		request.MaxRounds = 3
+	}
+	if request.Language == "" {
+		request.Language = "English"
+	}
+	if request.MaxCharLimit <= 0 {
+		request.MaxCharLimit = 1000
+	}
+
+	discussion, err := h.debateEngine.RunDebate(c.Request().Context(), request.Topic, request.AgentIDs, request.ModeratorID, request.MaxRounds, request.Language, request.MaxCharLimit)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": fmt.Sprintf("Failed to create discussion: %v", err)})
 	}
@@ -380,17 +394,21 @@ func (h *SSEHandler) StreamDiscussion(c echo.Context) error {
 				eventType = "log"
 				// Add agent name to log for UI
 				agent, _ := h.db.GetAgent(v.AgentID)
+				initial := "A"
+				name := "Unknown Agent"
 				if agent != nil {
-					// We can't modify the struct easily if it's a pointer to a shared one, 
-					// but here it's fine as we broadcasted a new one.
-					// Actually, let's wrap it in a map to include extra info.
-					update = map[string]interface{}{
-						"log": v,
-						"agent": map[string]string{
-							"name": agent.Name,
-							"initial": strings.ToUpper(agent.Name[:1]),
-						},
+					name = agent.Name
+					if len(name) > 0 {
+						runes := []rune(name)
+						initial = strings.ToUpper(string(runes[0]))
 					}
+				}
+				update = map[string]interface{}{
+					"log": v,
+					"agent": map[string]interface{}{
+						"name":    name,
+						"initial": initial,
+					},
 				}
 			case *models.Discussion:
 				eventType = "discussion"
@@ -436,9 +454,17 @@ func (h *PageHandler) Dashboard(c echo.Context) error {
 		return c.HTML(http.StatusInternalServerError, "<h1>Error loading discussions</h1>")
 	}
 
+	runningCount := 0
+	for _, d := range discussions {
+		if d.Status == "running" {
+			runningCount++
+		}
+	}
+
 	data := map[string]interface{}{
-		"Agents":      agents,
-		"Discussions": discussions,
+		"Agents":       agents,
+		"Discussions":  discussions,
+		"RunningCount": runningCount,
 	}
 
 	return c.Render(http.StatusOK, "dashboard.html", data)
@@ -482,21 +508,25 @@ func (h *PageHandler) DiscussionsPage(c echo.Context) error {
 func (h *PageHandler) DiscussionDetail(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
+		fmt.Printf("Error parsing discussion ID: %v\n", err)
 		return c.HTML(http.StatusBadRequest, "<h1>Invalid discussion ID</h1>")
 	}
 
 	discussion, err := h.db.GetDiscussion(id)
 	if err != nil {
+		fmt.Printf("Error fetching discussion %d: %v\n", id, err)
 		return c.HTML(http.StatusNotFound, "<h1>Discussion not found</h1>")
 	}
 
 	logs, err := h.db.GetDiscussionLogs(id)
 	if err != nil {
+		fmt.Printf("Error fetching logs for discussion %d: %v\n", id, err)
 		return c.HTML(http.StatusInternalServerError, "<h1>Error loading discussion logs</h1>")
 	}
 
 	agents, err := h.db.GetAllAgents()
 	if err != nil {
+		fmt.Printf("Error fetching agents: %v\n", err)
 		return c.HTML(http.StatusInternalServerError, "<h1>Error loading agents</h1>")
 	}
 
@@ -506,5 +536,10 @@ func (h *PageHandler) DiscussionDetail(c echo.Context) error {
 		"Agents":     agents,
 	}
 
-	return c.Render(http.StatusOK, "discussion_detail.html", data)
+	err = c.Render(http.StatusOK, "discussion_detail.html", data)
+	if err != nil {
+		fmt.Printf("Error rendering discussion_detail template: %v\n", err)
+		return err
+	}
+	return nil
 }

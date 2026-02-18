@@ -6,182 +6,145 @@
     <title>Court Table AI - Dashboard</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .loading {
-            opacity: 0.5;
-            pointer-events: none;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/stripe.css">
 </head>
-<body class="bg-gray-50">
-    <nav class="bg-blue-600 text-white shadow-lg">
+<body class="bg-[#f6f9fc]">
+    <nav class="stripe-nav sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
-                    <h1 class="text-xl font-bold">Court Table AI</h1>
+                    <span class="text-[#6772e5] font-bold text-2xl tracking-tight">CourtTableAI</span>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium bg-blue-700">Dashboard</a>
-                    <a href="/agents" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Agents</a>
-                    <a href="/discussions" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Discussions</a>
+                <div class="flex items-center">
+                    <a href="/" class="stripe-nav-link active">Dashboard</a>
+                    <a href="/agents" class="stripe-nav-link">Agents</a>
+                    <a href="/discussions" class="stripe-nav-link">Discussions</a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <!-- Quick Stats -->
-            <div class="mb-8">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-white overflow-hidden shadow rounded-lg">
-                        <div class="p-5">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0 bg-blue-500 rounded-md p-3">
-                                    <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                                    </svg>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate">Total Agents</dt>
-                                        <dd class="text-lg font-medium text-gray-900">{{ len .Agents }}</dd>
-                                    </dl>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <!-- Welcome Header -->
+        <div class="mb-10">
+            <h1 class="text-3xl font-bold text-[#32325d]">Overview</h1>
+            <p class="text-[#6b7c93] mt-2">Manage your AI agents and multi-agent debates in one place.</p>
+        </div>
 
-                    <div class="bg-white overflow-hidden shadow rounded-lg">
-                        <div class="p-5">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0 bg-green-500 rounded-md p-3">
-                                    <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                                    </svg>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate">Total Discussions</dt>
-                                        <dd class="text-lg font-medium text-gray-900">{{ len .Discussions }}</dd>
-                                    </dl>
-                                </div>
-                            </div>
-                        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+            <div class="stripe-card p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[#8898aa] text-sm font-semibold uppercase tracking-wider">Total Agents</p>
+                        <h3 class="text-3xl font-bold text-[#32325d] mt-1">{{ len .Agents }}</h3>
                     </div>
-
-                    <div class="bg-white overflow-hidden shadow rounded-lg">
-                        <div class="p-5">
-                            <div class="flex items-center">
-                                <div class="flex-shrink-0 bg-yellow-500 rounded-md p-3">
-                                    <svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
-                                    </svg>
-                                </div>
-                                <div class="ml-5 w-0 flex-1">
-                                    <dl>
-                                        <dt class="text-sm font-medium text-gray-500 truncate">Active Debates</dt>
-                                        <dd class="text-lg font-medium text-gray-900">
-                                            {{ range .Discussions }}
-                                                {{ if eq .Status "running" }}+{{ end }}
-                                            {{ end }}0
-                                        </dd>
-                                    </dl>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="bg-[#f6f9fc] p-3 rounded-lg text-[#6772e5]">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
                     </div>
+                </div>
+                <div class="mt-4 flex items-center text-sm">
+                    <a href="/agents" class="text-[#6772e5] font-medium hover:underline">View all agents &rarr;</a>
                 </div>
             </div>
 
-            <!-- Quick Actions -->
-            <div class="mb-8">
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">Quick Actions</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="bg-white p-6 rounded-lg shadow">
-                        <h3 class="text-lg font-medium text-gray-900 mb-2">Start New Debate</h3>
-                        <p class="text-gray-600 mb-4">Create a new multi-agent discussion on any topic.</p>
-                        <button onclick="window.location.href='/discussions'" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                            Start Debate
-                        </button>
+            <div class="stripe-card p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[#8898aa] text-sm font-semibold uppercase tracking-wider">Total Discussions</p>
+                        <h3 class="text-3xl font-bold text-[#32325d] mt-1">{{ len .Discussions }}</h3>
                     </div>
-                    <div class="bg-white p-6 rounded-lg shadow">
-                        <h3 class="text-lg font-medium text-gray-900 mb-2">Manage Agents</h3>
-                        <p class="text-gray-600 mb-4">Configure AI agents with different models and providers.</p>
-                        <button onclick="window.location.href='/agents'" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
-                            Manage Agents
-                        </button>
+                    <div class="bg-[#f6f9fc] p-3 rounded-lg text-[#6772e5]">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
                     </div>
+                </div>
+                <div class="mt-4 flex items-center text-sm">
+                    <a href="/discussions" class="text-[#6772e5] font-medium hover:underline">View all debates &rarr;</a>
                 </div>
             </div>
 
-            <!-- Recent Discussions -->
-            <div>
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">Recent Discussions</h2>
-                <div class="bg-white shadow rounded-lg">
-                    {{ if .Discussions }}
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Topic</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                {{ range .Discussions }}
-                                <tr>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="text-sm font-medium text-gray-900">{{ .Topic }}</div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                            {{ if eq .Status "running" }}bg-yellow-100 text-yellow-800
-                                            {{ else if eq .Status "completed" }}bg-green-100 text-green-800
-                                            {{ else }}bg-red-100 text-red-800{{ end }}">
-                                            {{ .Status }}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {{ .CreatedAt.Format "Jan 02, 2006 15:04" }}
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        <a href="/discussions/{{ .ID }}" class="text-blue-600 hover:text-blue-900 mr-3">View</a>
-                                        <button onclick="deleteDiscussion({{ .ID }})" class="text-red-600 hover:text-red-900">Delete</button>
-                                    </td>
-                                </tr>
-                                {{ end }}
-                            </tbody>
-                        </table>
+            <div class="stripe-card p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-[#8898aa] text-sm font-semibold uppercase tracking-wider">Active Status</p>
+                        <h3 class="text-3xl font-bold text-[#32325d] mt-1">
+                            {{ .RunningCount }}
+                        </h3>
                     </div>
-                    {{ else }}
-                    <div class="p-6 text-center">
-                        <p class="text-gray-500">No discussions yet. <a href="/discussions" class="text-blue-600 hover:text-blue-900">Start your first debate</a>.</p>
+                    <div class="bg-[#f6f9fc] p-3 rounded-lg text-[#6772e5]">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-center text-sm">
+                    <span class="text-[#24b47e] font-medium flex items-center"><span class="h-2 w-2 bg-[#24b47e] rounded-full mr-2"></span> System Online</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Recent Discussions Table -->
+            <div class="stripe-card overflow-hidden">
+                <div class="px-6 py-4 border-b border-[#e6ebf1] flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-[#32325d]">Recent Discussions</h2>
+                    <a href="/discussions" class="text-[#6772e5] text-sm font-medium hover:underline">View all</a>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="stripe-table min-w-full divide-y divide-[#e6ebf1]">
+                        <thead>
+                            <tr>
+                                <th class="px-6 py-3 text-left">Topic</th>
+                                <th class="px-6 py-3 text-left">Status</th>
+                                <th class="px-6 py-4 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[#e6ebf1]">
+                            {{ range slice .Discussions 0 (min (len .Discussions) 5) }}
+                            <tr class="hover:bg-[#f6f9fc] transition-colors">
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-[#32325d] max-w-[200px] truncate">{{ .Topic }}</div>
+                                    <div class="text-xs text-[#8898aa]">{{ .CreatedAt.Format "Jan 02, 15:04" }}</div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="stripe-badge {{ if eq .Status "running" }}stripe-badge-warning animate-pulse{{ else if eq .Status "completed" }}stripe-badge-success{{ else }}stripe-badge-danger{{ end }}">
+                                        {{ .Status }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <a href="/discussions/{{ .ID }}" class="text-[#6772e5] font-semibold hover:text-[#32325d]">Details</a>
+                                </td>
+                            </tr>
+                            {{ end }}
+                            {{ if not .Discussions }}
+                            <tr>
+                                <td colspan="3" class="px-6 py-10 text-center text-[#6b7c93]">No discussions found.</td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Agents Grid -->
+            <div class="stripe-card overflow-hidden">
+                <div class="px-6 py-4 border-b border-[#e6ebf1] flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-[#32325d]">Available Agents</h2>
+                    <a href="/agents" class="text-[#6772e5] text-sm font-medium hover:underline">Manage</a>
+                </div>
+                <div class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {{ range slice .Agents 0 (min (len .Agents) 6) }}
+                    <div class="border border-[#e6ebf1] rounded-lg p-4 hover:border-[#6772e5] transition-colors cursor-default">
+                        <div class="flex items-center space-x-3">
+                            <div class="h-8 w-8 rounded-full bg-[#f6f9fc] flex items-center justify-center text-[#6772e5] font-bold">
+                                {{ substr .Name 0 1 | upper }}
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-bold text-[#32325d]">{{ .Name }}</h4>
+                                <p class="text-xs text-[#8898aa]">{{ .ModelName }}</p>
+                            </div>
+                        </div>
                     </div>
                     {{ end }}
-                </div>
-            </div>
-
-            <!-- Available Agents -->
-            <div class="mt-8">
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">Available Agents</h2>
-                <div class="bg-white shadow rounded-lg">
-                    {{ if .Agents }}
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
-                        {{ range .Agents }}
-                        <div class="border border-gray-200 rounded-lg p-4">
-                            <h3 class="font-medium text-gray-900">{{ .Name }}</h3>
-                            <p class="text-sm text-gray-600 mt-1">{{ .ModelName }}</p>
-                            <p class="text-xs text-gray-500 mt-2">Timeout: {{ .TimeoutSeconds }}s</p>
-                        </div>
-                        {{ end }}
-                    </div>
-                    {{ else }}
-                    <div class="p-6 text-center">
-                        <p class="text-gray-500">No agents configured yet. <a href="/agents" class="text-blue-600 hover:text-blue-900">Add your first agent</a>.</p>
-                    </div>
+                    {{ if not .Agents }}
+                    <div class="col-span-2 py-10 text-center text-[#6b7c93]">No agents configured.</div>
                     {{ end }}
                 </div>
             </div>

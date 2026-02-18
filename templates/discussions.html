@@ -6,170 +6,177 @@
     <title>Discussions - Court Table AI</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .loading {
-            opacity: 0.5;
-            pointer-events: none;
-        }
-        .agent-response {
-            animation: fadeIn 0.5s ease-in;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/stripe.css">
 </head>
-<body class="bg-gray-50">
-    <nav class="bg-blue-600 text-white shadow-lg">
+<body class="bg-[#f6f9fc]">
+    <nav class="stripe-nav sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
-                    <h1 class="text-xl font-bold">Court Table AI - Discussions</h1>
+                    <span class="text-[#6772e5] font-bold text-2xl tracking-tight">CourtTableAI</span>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Dashboard</a>
-                    <a href="/agents" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Agents</a>
-                    <a href="/discussions" class="px-3 py-2 rounded-md text-sm font-medium bg-blue-700">Discussions</a>
+                <div class="flex items-center">
+                    <a href="/" class="stripe-nav-link">Dashboard</a>
+                    <a href="/agents" class="stripe-nav-link">Agents</a>
+                    <a href="/discussions" class="stripe-nav-link active">Discussions</a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <!-- Header with Create Button -->
-            <div class="mb-6 flex justify-between items-center">
-                <h2 class="text-2xl font-bold text-gray-900">Multi-Agent Discussions</h2>
-                <button onclick="showCreateModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    Start New Discussion
-                </button>
+    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <!-- Header with Create Button -->
+        <div class="mb-8 flex justify-between items-end">
+            <div>
+                <h1 class="text-3xl font-bold text-[#32325d]">Discussions</h1>
+                <p class="text-[#6b7c93] mt-2">Create and manage your multi-agent debate sessions.</p>
             </div>
+            <button onclick="showCreateModal()" class="stripe-btn-primary flex items-center">
+                <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                New Discussion
+            </button>
+        </div>
 
-            <!-- Discussions List -->
-            <div class="bg-white shadow rounded-lg">
-                {{ if .Discussions }}
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Topic</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agents</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            {{ range .Discussions }}
-                            <tr>
-                                <td class="px-6 py-4">
-                                    <div class="text-sm font-medium text-gray-900 max-w-md truncate" title="{{ .Topic }}">
-                                        {{ .Topic }}
-                                    </div>
-                                    {{ if .FinalSummary }}
-                                    <div class="text-sm text-gray-500 max-w-md truncate" title="{{ .FinalSummary }}">
-                                        {{ .FinalSummary }}
-                                    </div>
-                                    {{ end }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ len .AgentIDs }} agents
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                                        {{ if eq .Status "running" }}bg-yellow-100 text-yellow-800 animate-pulse
-                                        {{ else if eq .Status "completed" }}bg-green-100 text-green-800
-                                        {{ else }}bg-red-100 text-red-800{{ end }}">
-                                        {{ .Status }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {{ .CreatedAt.Format "Jan 02, 15:04" }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <a href="/discussions/{{ .ID }}" class="text-blue-600 hover:text-blue-900 mr-3">View</a>
+        <!-- Discussions List -->
+        <div class="stripe-card overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="stripe-table min-w-full divide-y divide-[#e6ebf1]">
+                    <thead>
+                        <tr>
+                            <th class="px-6 py-4 text-left">Topic</th>
+                            <th class="px-6 py-4 text-left">Setup</th>
+                            <th class="px-6 py-4 text-left">Status</th>
+                            <th class="px-6 py-4 text-left">Created</th>
+                            <th class="px-6 py-4 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[#e6ebf1]">
+                        {{ range .Discussions }}
+                        <tr class="hover:bg-[#f6f9fc] transition-colors">
+                            <td class="px-6 py-4">
+                                <div class="text-sm font-bold text-[#32325d] max-w-md truncate" title="{{ .Topic }}">
+                                    {{ .Topic }}
+                                </div>
+                                {{ if .Language }}
+                                <div class="flex items-center mt-1">
+                                    <span class="text-xs text-[#8898aa] mr-2">Language: {{ .Language }}</span>
+                                    <span class="text-xs text-[#8898aa]">Rounds: {{ .MaxRounds }}</span>
+                                </div>
+                                {{ end }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-[#32325d]">{{ len .AgentIDs }} Agents</div>
+                                <div class="text-xs text-[#8898aa]">{{ .MaxCharLimit }} chars max</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="stripe-badge {{ if eq .Status "running" }}stripe-badge-warning animate-pulse{{ else if eq .Status "completed" }}stripe-badge-success{{ else }}stripe-badge-danger{{ end }}">
+                                    {{ .Status }}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-[#6b7c93]">
+                                {{ .CreatedAt.Format "Jan 02, 15:04" }}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <div class="flex justify-end space-x-3">
+                                    <a href="/discussions/{{ .ID }}" class="text-[#6772e5] hover:text-[#32325d] font-bold">View</a>
                                     {{ if eq .Status "running" }}
-                                    <button onclick="stopDiscussion({{ .ID }})" class="text-yellow-600 hover:text-yellow-900 mr-3">Stop</button>
+                                    <button onclick="stopDiscussion({{ .ID }})" class="text-[#f5a623] hover:text-[#32325d] font-bold">Stop</button>
                                     {{ end }}
-                                    <button onclick="deleteDiscussion({{ .ID }})" class="text-red-600 hover:text-red-900">Delete</button>
-                                </td>
-                            </tr>
-                            {{ end }}
-                        </tbody>
-                    </table>
-                </div>
-                {{ else }}
-                <div class="p-12 text-center">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
-                    </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">No discussions</h3>
-                    <p class="mt-1 text-sm text-gray-500">Get started by creating a new multi-agent discussion.</p>
-                    <div class="mt-6">
-                        <button onclick="showCreateModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                            Start New Discussion
-                        </button>
-                    </div>
-                </div>
-                {{ end }}
+                                    <button onclick="deleteDiscussion({{ .ID }})" class="text-[#e13d3d] hover:text-[#32325d] font-bold">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {{ end }}
+                        {{ if not .Discussions }}
+                        <tr>
+                            <td colspan="5" class="px-6 py-20 text-center">
+                                <div class="flex flex-col items-center">
+                                    <svg class="h-12 w-12 text-[#e6ebf1] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                                    <p class="text-[#6b7c93]">No discussions found. Start your first debate!</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {{ end }}
+                    </tbody>
+                </table>
             </div>
         </div>
     </main>
 
     <!-- Create Discussion Modal -->
-    <div id="createModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-hidden hidden">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div class="mt-3">
-                <h3 class="text-lg font-medium text-gray-900">Start New Discussion</h3>
-                <form id="discussionForm" class="mt-4 space-y-4">
-                    <div>
-                        <label for="topic" class="block text-sm font-medium text-gray-700">Discussion Topic</label>
-                        <textarea id="topic" name="topic" required rows="3" 
-                                  placeholder="What topic should the AI agents debate about?"
-                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"></textarea>
-                    </div>
-                    
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Agents</label>
-                        <div class="space-y-2 max-h-48 overflow-y-auto border rounded-md p-2">
-                            {{ range .Agents }}
-                            <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
-                                <input type="checkbox" name="agent_ids" value="{{ .ID }}" 
-                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
-                                <div>
-                                    <span class="text-sm font-medium text-gray-900">{{ .Name }}</span>
-                                    <span class="text-xs text-gray-500 block">{{ .ModelName }}</span>
-                                </div>
-                            </label>
-                            {{ end }}
+    <div id="createModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-[#32325d] bg-opacity-40 transition-opacity" aria-hidden="true" onclick="hideCreateModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-8 pt-8 pb-8">
+                    <h3 class="text-xl font-bold text-[#32325d] mb-6" id="modal-title">Start New Discussion</h3>
+                    <form id="discussionForm" class="space-y-6">
+                        <div>
+                            <label for="topic" class="block text-sm font-bold text-[#32325d] mb-2">Discussion Topic</label>
+                            <textarea id="topic" name="topic" required rows="3" 
+                                      placeholder="What should the agents debate about?"
+                                      class="stripe-input w-full"></textarea>
                         </div>
-                        {{ if not .Agents }}
-                        <p class="text-sm text-gray-500">No agents available. <a href="/agents" class="text-blue-600 hover:text-blue-900">Create an agent first</a>.</p>
-                        {{ end }}
-                    </div>
-                    
-                    <div>
-                        <label for="moderator_id" class="block text-sm font-medium text-gray-700 mb-2">Moderator (Optional)</label>
-                        <select id="moderator_id" name="moderator_id" 
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
-                            <option value="">No Moderator</option>
-                            {{ range .Agents }}
-                            <option value="{{ .ID }}">{{ .Name }} ({{ .ModelName }})</option>
-                            {{ end }}
-                        </select>
-                        <p class="mt-1 text-xs text-gray-500">Optional: Select an agent to moderate the discussion</p>
-                    </div>
-                    
-                    <div class="flex space-x-3 pt-4">
-                        <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700" {{ if not .Agents }}disabled{{ end }}>
-                            Start Discussion
-                        </button>
-                        <button type="button" onclick="hideCreateModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">
-                            Cancel
-                        </button>
-                    </div>
-                </form>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="max_rounds" class="block text-sm font-bold text-[#32325d] mb-2">Max Rounds</label>
+                                <input type="number" id="max_rounds" name="max_rounds" value="3" min="1" max="10" class="stripe-input w-full">
+                            </div>
+                            <div>
+                                <label for="language" class="block text-sm font-bold text-[#32325d] mb-2">Language</label>
+                                <select id="language" name="language" class="stripe-input w-full bg-white">
+                                    <option value="English">English</option>
+                                    <option value="Indonesian">Indonesian</option>
+                                    <option value="Spanish">Spanish</option>
+                                    <option value="French">French</option>
+                                    <option value="German">German</option>
+                                    <option value="Japanese">Japanese</option>
+                                    <option value="Chinese">Chinese</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label for="max_char_limit" class="block text-sm font-bold text-[#32325d] mb-2">Response Character Limit</label>
+                            <input type="number" id="max_char_limit" name="max_char_limit" value="1000" min="100" max="5000" class="stripe-input w-full">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-[#32325d] mb-3">Select Agents</label>
+                            <div class="space-y-2 max-h-40 overflow-y-auto border border-[#e6ebf1] rounded-md p-3">
+                                {{ range .Agents }}
+                                <label class="flex items-center space-x-3 cursor-pointer hover:bg-[#f6f9fc] p-2 rounded transition-colors">
+                                    <input type="checkbox" name="agent_ids" value="{{ .ID }}" class="h-4 w-4 text-[#6772e5] border-[#e6ebf1] rounded focus:ring-[#6772e5]">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-bold text-[#32325d]">{{ .Name }}</p>
+                                        <p class="text-xs text-[#8898aa]">{{ .ModelName }}</p>
+                                    </div>
+                                </label>
+                                {{ end }}
+                                {{ if not .Agents }}
+                                <p class="text-sm text-[#8898aa] text-center py-2">No agents available. <a href="/agents" class="text-[#6772e5] font-bold">Create one</a>.</p>
+                                {{ end }}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label for="moderator_id" class="block text-sm font-bold text-[#32325d] mb-2">Moderator (Optional)</label>
+                            <select id="moderator_id" name="moderator_id" class="stripe-input w-full bg-white">
+                                <option value="">No Moderator</option>
+                                {{ range .Agents }}
+                                <option value="{{ .ID }}">{{ .Name }}</option>
+                                {{ end }}
+                            </select>
+                        </div>
+                        
+                        <div class="flex flex-row-reverse gap-3 pt-4 border-t border-[#e6ebf1]">
+                            <button type="submit" class="stripe-btn-primary flex-1" {{ if not .Agents }}disabled{{ end }}>Start Discussion</button>
+                            <button type="button" onclick="hideCreateModal()" class="flex-1 bg-white border border-[#e6ebf1] text-[#6b7c93] font-bold py-2 rounded shadow-sm hover:bg-[#f6f9fc]">Cancel</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -231,6 +238,9 @@
             const topic = formData.get('topic');
             const agentIds = formData.getAll('agent_ids').map(id => parseInt(id));
             const moderatorId = formData.get('moderator_id');
+            const maxRounds = parseInt(formData.get('max_rounds'));
+            const language = formData.get('language');
+            const maxCharLimit = parseInt(formData.get('max_char_limit'));
             
             if (agentIds.length === 0) {
                 alert('Please select at least one agent');
@@ -239,7 +249,10 @@
             
             const requestData = {
                 topic: topic,
-                agent_ids: agentIds
+                agent_ids: agentIds,
+                max_rounds: maxRounds,
+                language: language,
+                max_char_limit: maxCharLimit
             };
             
             // Add moderator if selected

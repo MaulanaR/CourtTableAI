@@ -191,7 +191,7 @@ func (ac *AgentClient) setAuthHeaders(req *http.Request, agent *models.Agent) {
 	if providerType == "" {
 		providerType = detectProviderType(agent.ProviderURL)
 	}
-	
+
 	token := strings.TrimSpace(agent.APIToken)
 	if token == "" {
 		return
@@ -272,7 +272,7 @@ func (ac *AgentClient) callAnthropic(ctx context.Context, agent *models.Agent, p
 	reqBody := AnthropicRequest{
 		Model:       agent.ModelName,
 		MaxTokens:   4000,
-		Temperature: 0.7,
+		Temperature: 0.9,
 		Messages:    messages,
 		System:      systemMessage,
 	}
@@ -545,7 +545,7 @@ func (ac *AgentClient) callGoogle(ctx context.Context, agent *models.Agent, prom
 			Temperature     float64 `json:"temperature"`
 			MaxOutputTokens int     `json:"maxOutputTokens"`
 		}{
-			Temperature:     0.7,
+			Temperature:     0.9,
 			MaxOutputTokens: 4000,
 		},
 	}
@@ -751,7 +751,7 @@ func (ac *AgentClient) callOpenAI(ctx context.Context, agent *models.Agent, prom
 	// Determine the endpoint
 	endpoints := ac.getChatEndpoints(agent.ProviderURL)
 	var lastErr error
-	
+
 	for _, endpoint := range endpoints {
 		req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
 		if err != nil {
@@ -1099,7 +1099,7 @@ func (ac *AgentClient) logInteraction(req *http.Request, reqBody []byte, resp *h
 	fmt.Printf("Time: %s\n", time.Now().Format(time.RFC3339))
 	fmt.Printf("Method: %s\n", req.Method)
 	fmt.Printf("URL: %s\n", req.URL.String())
-	
+
 	// Print Headers (masked auth)
 	fmt.Println("Headers:")
 	for k, v := range req.Header {

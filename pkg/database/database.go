@@ -16,16 +16,22 @@ type DB struct {
 
 // NewDB creates a new database connection
 func NewDB(dataSourceName string) (*DB, error) {
-	// Add WAL mode for better concurrency
-	if !contains(dataSourceName, "?") {
-		dataSourceName += "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
-	} else {
-		dataSourceName += "&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
-	}
-
 	db, err := sql.Open("sqlite", dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Execute pragmas separately for better compatibility with modernc.org/sqlite
+	pragmas := []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA busy_timeout=5000",
+		"PRAGMA foreign_keys=ON",
+	}
+
+	for _, pragma := range pragmas {
+		if _, err := db.Exec(pragma); err != nil {
+			log.Printf("Warning: failed to execute pragma %s: %v", pragma, err)
+		}
 	}
 
 	if err = db.Ping(); err != nil {
@@ -35,9 +41,8 @@ func NewDB(dataSourceName string) (*DB, error) {
 	return &DB{db}, nil
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && s[0:len(s)] == s
-}
+// Remove the broken custom contains function as we now use strings.Contains
+
 
 // CreateTables creates all necessary tables for the application
 func (db *DB) CreateTables() error {
@@ -68,6 +73,9 @@ func (db *DB) CreateTables() error {
 		status TEXT DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
 		agent_ids TEXT NOT NULL,
 		moderator_id INTEGER,
+		max_rounds INTEGER DEFAULT 3,
+		language TEXT DEFAULT 'English',
+		max_char_limit INTEGER DEFAULT 1000,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (moderator_id) REFERENCES agents(id) ON DELETE SET NULL
@@ -117,6 +125,9 @@ func (db *DB) CreateTables() error {
 	// We use individual Exec calls and ignore errors because SQLite doesn't support 'IF NOT EXISTS' for columns
 	db.Exec("ALTER TABLE agents ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'custom'")
 	db.Exec("ALTER TABLE discussions ADD COLUMN moderator_id INTEGER")
+	db.Exec("ALTER TABLE discussions ADD COLUMN max_rounds INTEGER DEFAULT 3")
+	db.Exec("ALTER TABLE discussions ADD COLUMN language TEXT DEFAULT 'English'")
+	db.Exec("ALTER TABLE discussions ADD COLUMN max_char_limit INTEGER DEFAULT 1000")
 	db.Exec("ALTER TABLE discussion_logs ADD COLUMN is_moderator BOOLEAN DEFAULT FALSE")
 	
 	// Ensure these columns are NOT NULL for stability
@@ -187,7 +198,7 @@ func (db *DB) GetAllAgents() ([]*models.Agent, error) {
 	}
 	defer rows.Close()
 
-	var agents []*models.Agent
+	agents := []*models.Agent{}
 	for rows.Next() {
 		agent := &models.Agent{}
 		err := rows.Scan(
@@ -254,13 +265,14 @@ func (db *DB) DeleteAgent(id int64) error {
 // InsertDiscussion creates a new discussion
 func (db *DB) InsertDiscussion(discussion *models.Discussion) error {
 	query := `
-	INSERT INTO discussions (topic, final_summary, status, agent_ids, moderator_id, created_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO discussions (topic, final_summary, status, agent_ids, moderator_id, max_rounds, language, max_char_limit, created_at, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	
 	now := time.Now()
 	result, err := db.Exec(query, discussion.Topic, discussion.FinalSummary, 
-		discussion.Status, discussion.AgentIDs, discussion.ModeratorID, now, now)
+		discussion.Status, discussion.AgentIDs, discussion.ModeratorID, 
+		discussion.MaxRounds, discussion.Language, discussion.MaxCharLimit, now, now)
 	if err != nil {
 		return fmt.Errorf("failed to insert discussion: %w", err)
 	}
@@ -279,14 +291,17 @@ func (db *DB) InsertDiscussion(discussion *models.Discussion) error {
 // GetDiscussion retrieves a discussion by ID
 func (db *DB) GetDiscussion(id int64) (*models.Discussion, error) {
 	query := `
-	SELECT id, topic, COALESCE(final_summary, ''), status, agent_ids, moderator_id, created_at, updated_at
+	SELECT id, topic, COALESCE(final_summary, ''), status, agent_ids, moderator_id, 
+	       COALESCE(max_rounds, 3), COALESCE(language, 'English'), COALESCE(max_char_limit, 1000), 
+	       created_at, updated_at
 	FROM discussions WHERE id = ?
 	`
 	
 	discussion := &models.Discussion{}
 	err := db.QueryRow(query, id).Scan(
 		&discussion.ID, &discussion.Topic, &discussion.FinalSummary,
-		&discussion.Status, &discussion.AgentIDs, &discussion.ModeratorID, 
+		&discussion.Status, &discussion.AgentIDs, &discussion.ModeratorID,
+		&discussion.MaxRounds, &discussion.Language, &discussion.MaxCharLimit,
 		&discussion.CreatedAt, &discussion.UpdatedAt,
 	)
 	
@@ -303,7 +318,9 @@ func (db *DB) GetDiscussion(id int64) (*models.Discussion, error) {
 // GetAllDiscussions retrieves all discussions
 func (db *DB) GetAllDiscussions() ([]*models.Discussion, error) {
 	query := `
-	SELECT id, topic, COALESCE(final_summary, ''), status, agent_ids, moderator_id, created_at, updated_at
+	SELECT id, topic, COALESCE(final_summary, ''), status, agent_ids, moderator_id, 
+	       COALESCE(max_rounds, 3), COALESCE(language, 'English'), COALESCE(max_char_limit, 1000), 
+	       created_at, updated_at
 	FROM discussions ORDER BY created_at DESC
 	`
 	
@@ -318,7 +335,8 @@ func (db *DB) GetAllDiscussions() ([]*models.Discussion, error) {
 		discussion := &models.Discussion{}
 		err := rows.Scan(
 			&discussion.ID, &discussion.Topic, &discussion.FinalSummary,
-			&discussion.Status, &discussion.AgentIDs, &discussion.ModeratorID, 
+			&discussion.Status, &discussion.AgentIDs, &discussion.ModeratorID,
+			&discussion.MaxRounds, &discussion.Language, &discussion.MaxCharLimit,
 			&discussion.CreatedAt, &discussion.UpdatedAt,
 		)
 		if err != nil {

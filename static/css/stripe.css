@@ -1,0 +1,98 @@
+body {
+    background-color: #f6f9fc;
+    color: #32325d;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif;
+}
+
+.stripe-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+    transition: all 0.15s ease;
+}
+
+.stripe-card:hover {
+    box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+}
+
+.stripe-btn-primary {
+    background-color: #6772e5;
+    color: white;
+    font-weight: 600;
+    border-radius: 4px;
+    padding: 8px 16px;
+    transition: all 0.15s ease;
+    box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.stripe-btn-primary:hover {
+    background-color: #7795f8;
+    transform: translateY(-1px);
+    box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
+}
+
+.stripe-nav {
+    background: white;
+    border-bottom: 1px solid #e6ebf1;
+}
+
+.stripe-nav-link {
+    color: #6772e5;
+    font-weight: 500;
+    padding: 20px 0;
+    margin-right: 30px;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.stripe-nav-link:hover, .stripe-nav-link.active {
+    color: #32325d;
+    border-bottom-color: #6772e5;
+}
+
+.stripe-table thead {
+    background-color: #f6f9fc;
+}
+
+.stripe-table th {
+    color: #8898aa;
+    text-transform: uppercase;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .025em;
+}
+
+.stripe-input {
+    border: 1px solid #e6ebf1;
+    border-radius: 4px;
+    padding: 10px 12px;
+    transition: border-color 0.15s ease;
+}
+
+.stripe-input:focus {
+    outline: none;
+    border-color: #6772e5;
+    box-shadow: 0 1px 3px rgba(50, 50, 93, 0.15), 0 1px 0 rgba(0, 0, 0, 0.02);
+}
+
+.stripe-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.stripe-badge-success {
+    background-color: #e3f9eb;
+    color: #24b47e;
+}
+
+.stripe-badge-warning {
+    background-color: #fef5d9;
+    color: #f5a623;
+}
+
+.stripe-badge-danger {
+    background-color: #fcebeb;
+    color: #e13d3d;
+}

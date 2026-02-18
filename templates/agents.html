@@ -6,207 +6,181 @@
     <title>Agents - Court Table AI</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .loading {
-            opacity: 0.5;
-            pointer-events: none;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/stripe.css">
 </head>
-<body class="bg-gray-50">
-    <nav class="bg-blue-600 text-white shadow-lg">
+<body class="bg-[#f6f9fc]">
+    <nav class="stripe-nav sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
-                    <h1 class="text-xl font-bold">Court Table AI - Agents</h1>
+                    <span class="text-[#6772e5] font-bold text-2xl tracking-tight">CourtTableAI</span>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Dashboard</a>
-                    <a href="/agents" class="px-3 py-2 rounded-md text-sm font-medium bg-blue-700">Agents</a>
-                    <a href="/discussions" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Discussions</a>
+                <div class="flex items-center">
+                    <a href="/" class="stripe-nav-link">Dashboard</a>
+                    <a href="/agents" class="stripe-nav-link active">Agents</a>
+                    <a href="/discussions" class="stripe-nav-link">Discussions</a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <!-- Header with Add Button -->
-            <div class="mb-6 flex justify-between items-center">
-                <h2 class="text-2xl font-bold text-gray-900">AI Agents</h2>
-                <button onclick="showAddModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    Add New Agent
-                </button>
+    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div class="mb-8 flex justify-between items-end">
+            <div>
+                <h1 class="text-3xl font-bold text-[#32325d]">Agents</h1>
+                <p class="text-[#6b7c93] mt-2">Configure AI agents with different models and providers.</p>
             </div>
+            <button onclick="showAddModal()" class="stripe-btn-primary flex items-center">
+                <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                New Agent
+            </button>
+        </div>
 
-            <!-- Agents Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="agents-container">
-                {{ range .Agents }}
-                <div class="bg-white shadow rounded-lg p-6 agent-card" data-agent-id="{{ .ID }}">
-                    <div class="flex justify-between items-start mb-4">
-                        <h3 class="text-lg font-medium text-gray-900">{{ .Name }}</h3>
-                        <div class="flex space-x-2">
-                            <button onclick="editAgent({{ .ID }})" class="text-blue-600 hover:text-blue-900">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                </svg>
-                            </button>
-                            <button onclick="duplicateAgent({{ .ID }})" class="text-green-600 hover:text-green-900" title="Duplicate Agent">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                                </svg>
-                            </button>
-                            <button onclick="deleteAgent({{ .ID }})" class="text-red-600 hover:text-red-900">
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                                </svg>
-                            </button>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="agents-container">
+            {{ range .Agents }}
+            <div class="stripe-card p-6 flex flex-col h-full agent-card" data-agent-id="{{ .ID }}">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex items-center space-x-3">
+                        <div class="h-10 w-10 rounded-full bg-[#f6f9fc] flex items-center justify-center text-[#6772e5] font-bold text-lg">
+                            {{ substr .Name 0 1 | upper }}
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-[#32325d]">{{ .Name }}</h3>
+                            <span class="text-xs font-semibold uppercase tracking-wider text-[#8898aa]">{{ getProviderDisplay . }}</span>
                         </div>
                     </div>
-                    <div class="space-y-2">
-                        <div>
-                            <span class="text-sm text-gray-500">Provider:</span>
-                            <span class="text-sm text-gray-900 ml-2">{{ getProviderDisplay . }}</span>
-                        </div>
-                        <div>
-                            <span class="text-sm text-gray-500">Model:</span>
-                            <span class="text-sm text-gray-900 ml-2">{{ .ModelName }}</span>
-                        </div>
-                        <div>
-                            <span class="text-sm text-gray-500">URL:</span>
-                            <span class="text-sm text-gray-900 ml-2 truncate max-w-32 block" title="{{ .ProviderURL }}">{{ .ProviderURL }}</span>
-                        </div>
-                        <div>
-                            <span class="text-sm text-gray-500">Timeout:</span>
-                            <span class="text-sm text-gray-900 ml-2">{{ .TimeoutSeconds }}s</span>
-                        </div>
-                    </div>
-                    <div class="mt-4 flex space-x-2">
-                        <button onclick="pingAgent({{ .ID }})" class="flex-1 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
-                            Test Connection
+                    <div class="flex space-x-1">
+                        <button onclick="editAgent({{ .ID }})" class="p-2 text-[#6b7c93] hover:text-[#6772e5] transition-colors" title="Edit">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        </button>
+                        <button onclick="duplicateAgent({{ .ID }})" class="p-2 text-[#6b7c93] hover:text-[#24b47e] transition-colors" title="Duplicate">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                        <button onclick="deleteAgent({{ .ID }})" class="p-2 text-[#6b7c93] hover:text-[#e13d3d] transition-colors" title="Delete">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                         </button>
                     </div>
                 </div>
-                {{ end }}
+
+                <div class="space-y-4 flex-grow">
+                    <div class="flex justify-between items-center pb-3 border-b border-[#e6ebf1]">
+                        <span class="text-sm font-medium text-[#6b7c93]">Model</span>
+                        <span class="text-sm font-bold text-[#32325d]">{{ .ModelName }}</span>
+                    </div>
+                    <div class="flex flex-col space-y-1 pb-3 border-b border-[#e6ebf1]">
+                        <span class="text-sm font-medium text-[#6b7c93]">Endpoint</span>
+                        <span class="text-xs font-mono text-[#32325d] truncate" title="{{ .ProviderURL }}">{{ .ProviderURL }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-[#6b7c93]">Timeout</span>
+                        <span class="text-sm font-bold text-[#32325d]">{{ .TimeoutSeconds }}s</span>
+                    </div>
+                </div>
+
+                <div class="mt-8">
+                    <button onclick="pingAgent({{ .ID }})" class="w-full bg-white border border-[#e6ebf1] text-[#32325d] font-bold py-2 rounded shadow-sm hover:bg-[#f6f9fc] transition-colors flex items-center justify-center">
+                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        Test Connection
+                    </button>
+                </div>
             </div>
+            {{ end }}
 
             {{ if not .Agents }}
-            <div class="bg-white shadow rounded-lg p-12 text-center">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                </svg>
-                <h3 class="mt-2 text-sm font-medium text-gray-900">No agents</h3>
-                <p class="mt-1 text-sm text-gray-500">Get started by creating a new AI agent.</p>
-                <div class="mt-6">
-                    <button onclick="showAddModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                        Add New Agent
-                    </button>
+            <div class="stripe-card col-span-full py-20 text-center">
+                <div class="flex flex-col items-center">
+                    <svg class="h-12 w-12 text-[#e6ebf1] mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+                    <p class="text-[#6b7c93]">No agents found. Create your first AI agent!</p>
+                    <button onclick="showAddModal()" class="stripe-btn-primary mt-6">Add New Agent</button>
                 </div>
             </div>
             {{ end }}
         </div>
     </main>
 
-    <!-- Add/Edit Agent Modal -->
-    <div id="agentModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-hidden hidden">
-        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div class="mt-3">
-                <h3 class="text-lg font-medium text-gray-900" id="modalTitle">Add New Agent</h3>
-                <form id="agentForm" class="mt-4 space-y-4">
-                    <input type="hidden" id="agentId" name="id">
-                    
-                    <div>
-                        <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
-                        <input type="text" id="name" name="name" required 
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
-                    </div>
-                    
-                    <div>
-                        <label for="provider_type" class="block text-sm font-medium text-gray-700">Provider Type</label>
-                        <select id="provider_type" name="provider_type" required onchange="updateProviderUrl()"
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
-                            <option value="">Select Provider</option>
-                            <option value="ollama">Ollama (Local)</option>
-                            <option value="openai">OpenAI</option>
-                            <option value="anthropic">Anthropic (Claude)</option>
-                            <option value="google">Google (Gemini)</option>
-                            <option value="custom">Custom OpenAI-Compatible</option>
-                        </select>
-                    </div>
-                    
-                    <div>
-                        <label for="provider_url" class="block text-sm font-medium text-gray-700">Provider URL</label>
-                        <input type="url" id="provider_url" name="provider_url" required placeholder="Select provider type"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
-                        <p class="mt-1 text-xs text-gray-500" id="provider_help">Select a provider type to see recommended URL</p>
-                    </div>
-                    
-                    <div>
-                        <label for="api_token" class="block text-sm font-medium text-gray-700">
-                            API Token 
-                            <span id="token_required" class="text-red-500">*</span>
-                            <span id="token_optional" class="text-gray-400">(optional)</span>
-                        </label>
-                        <input type="password" id="api_token" name="api_token" placeholder="API authentication token"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
-                        <p class="mt-1 text-xs text-gray-500" id="token_help">Enter API token for selected provider</p>
-                    </div>
-                    
-                    <div>
-                        <label for="model_name" class="block text-sm font-medium text-gray-700">Model Name</label>
-                        <input type="text" id="model_name" name="model_name" required placeholder="Select provider type"
-                               list="model_suggestions"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
-                        <datalist id="model_suggestions">
-                            <!-- Will be populated by JavaScript -->
-                        </datalist>
-                        <p class="mt-1 text-xs text-gray-500" id="model_help">Select a provider type to see available models</p>
-                    </div>
-                    
-                    <div>
-                        <label for="timeout_seconds" class="block text-sm font-medium text-gray-700">Timeout (seconds)</label>
-                        <input type="number" id="timeout_seconds" name="timeout_seconds" value="30" min="1" max="300"
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
-                    </div>
-                    
-                    <div class="flex space-x-3 pt-4">
-                        <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                            Save Agent
-                        </button>
-                        <button type="button" onclick="hideModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">
-                            Cancel
-                        </button>
-                    </div>
-                </form>
+    <div id="agentModal" class="fixed inset-0 z-50 overflow-y-auto hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-[#32325d] bg-opacity-40 transition-opacity" aria-hidden="true" onclick="hideModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <div class="bg-white px-8 pt-8 pb-8">
+                    <h3 class="text-xl font-bold text-[#32325d] mb-6" id="modalTitle">Add New Agent</h3>
+                    <form id="agentForm" class="space-y-6">
+                        <input type="hidden" id="agentId" name="id">
+                        <div>
+                            <label for="name" class="block text-sm font-bold text-[#32325d] mb-2">Display Name</label>
+                            <input type="text" id="name" name="name" required class="stripe-input w-full" placeholder="e.g., GPT-4 Assistant">
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="provider_type" class="block text-sm font-bold text-[#32325d] mb-2">Provider Type</label>
+                                <select id="provider_type" name="provider_type" required onchange="updateProviderUrl()" class="stripe-input w-full bg-white">
+                                    <option value="">Select Provider</option>
+                                    <option value="ollama">Ollama (Local)</option>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="anthropic">Anthropic (Claude)</option>
+                                    <option value="google">Google (Gemini)</option>
+                                    <option value="custom">Custom OpenAI-Compatible</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="timeout_seconds" class="block text-sm font-bold text-[#32325d] mb-2">Timeout (seconds)</label>
+                                <input type="number" id="timeout_seconds" name="timeout_seconds" value="30" min="1" max="300" class="stripe-input w-full">
+                            </div>
+                        </div>
+                        <div>
+                            <label for="provider_url" class="block text-sm font-bold text-[#32325d] mb-2">Base URL</label>
+                            <input type="url" id="provider_url" name="provider_url" required class="stripe-input w-full" placeholder="Select provider type">
+                            <p class="mt-2 text-xs text-[#8898aa]" id="provider_help">Select a provider type to see recommended URL</p>
+                        </div>
+                        <div>
+                            <label for="api_token" class="block text-sm font-bold text-[#32325d] mb-2">
+                                API Token 
+                                <span id="token_required" class="text-[#e13d3d]">*</span>
+                                <span id="token_optional" class="text-[#8898aa] font-normal">(optional)</span>
+                            </label>
+                            <input type="password" id="api_token" name="api_token" class="stripe-input w-full" placeholder="API key or token">
+                        </div>
+                        <div>
+                            <label for="model_name" class="block text-sm font-bold text-[#32325d] mb-2">Model Name</label>
+                            <input type="text" id="model_name" name="model_name" required list="model_suggestions" class="stripe-input w-full" placeholder="Select provider type">
+                            <datalist id="model_suggestions"></datalist>
+                            <p class="mt-2 text-xs text-[#8898aa]" id="model_help">Select a provider type to see available models</p>
+                        </div>
+                        <div class="flex flex-row-reverse gap-3 pt-6 border-t border-[#e6ebf1]">
+                            <button type="submit" class="stripe-btn-primary flex-1">Save Agent</button>
+                            <button type="button" onclick="hideModal()" class="flex-1 bg-white border border-[#e6ebf1] text-[#6b7c93] font-bold py-2 rounded shadow-sm hover:bg-[#f6f9fc]">Cancel</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Provider configurations
         const providerConfigs = {
             ollama: {
                 url: 'http://localhost:11434',
                 help: 'Default Ollama local server URL',
-                models: ['llama2', 'llama2:13b', 'codellama', 'mistral', 'mixtral', 'vicuna', 'phi', 'qwen'],
+                models: ['llama3', 'llama2', 'mistral', 'phi3'],
                 apiRequired: false
             },
             openai: {
                 url: 'https://api.openai.com/v1',
                 help: 'OpenAI official API endpoint',
-                models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo', 'gpt-3.5-turbo-16k'],
+                models: ['gpt-4o', 'gpt-4-turbo', 'gpt-3.5-turbo'],
                 apiRequired: true
             },
             anthropic: {
                 url: 'https://api.anthropic.com/v1',
                 help: 'Anthropic Claude API endpoint',
-                models: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307', 'claude-2.1', 'claude-2.0'],
+                models: ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'],
                 apiRequired: true
             },
             google: {
                 url: 'https://generativelanguage.googleapis.com/v1beta',
                 help: 'Google Gemini API endpoint',
-                models: ['gemini-1.5-pro', 'gemini-1.0-pro', 'gemini-pro-vision'],
+                models: ['gemini-1.5-pro', 'gemini-1.0-pro'],
                 apiRequired: true
             },
             custom: {
@@ -224,55 +198,27 @@
             const tokenInput = document.getElementById('api_token');
             const helpText = document.getElementById('provider_help');
             const modelHelp = document.getElementById('model_help');
-            const tokenHelp = document.getElementById('token_help');
             const modelDatalist = document.getElementById('model_suggestions');
             const tokenRequired = document.getElementById('token_required');
             const tokenOptional = document.getElementById('token_optional');
             
             if (providerType && providerConfigs[providerType]) {
                 const config = providerConfigs[providerType];
-                
-                // Update URL if not skipping
-                if (!skipValueUpdate) {
-                    urlInput.value = config.url;
-                }
+                if (!skipValueUpdate) urlInput.value = config.url;
                 helpText.textContent = config.help;
-                
-                // Update model suggestions
                 modelDatalist.innerHTML = config.models.map(model => `<option value="${model}">`).join('');
-                if (!skipValueUpdate) {
-                    modelInput.placeholder = config.models.length > 0 ? `e.g., ${config.models[0]}` : 'Enter model name';
-                }
-                modelHelp.textContent = config.models.length > 0 ? `Available models: ${config.models.slice(0, 3).join(', ')}${config.models.length > 3 ? '...' : ''}` : 'Enter your custom model name';
+                if (!skipValueUpdate) modelInput.placeholder = config.models.length > 0 ? `e.g., ${config.models[0]}` : 'Enter model name';
+                modelHelp.textContent = config.models.length > 0 ? `Available models: ${config.models.slice(0, 3).join(', ')}` : 'Enter your custom model name';
                 
-                // Update API token requirement indicator
                 if (config.apiRequired) {
                     tokenInput.required = true;
-                    tokenInput.placeholder = 'Required for ' + providerType.charAt(0).toUpperCase() + providerType.slice(1);
                     tokenRequired.style.display = 'inline';
                     tokenOptional.style.display = 'none';
-                    tokenHelp.textContent = 'API token required for ' + providerType.charAt(0).toUpperCase() + providerType.slice(1);
                 } else {
                     tokenInput.required = false;
-                    tokenInput.placeholder = 'Optional for ' + providerType.charAt(0).toUpperCase() + providerType.slice(1);
                     tokenRequired.style.display = 'none';
                     tokenOptional.style.display = 'inline';
-                    tokenHelp.textContent = 'API token optional for ' + providerType.charAt(0).toUpperCase() + providerType.slice(1);
                 }
-            } else {
-                if (!skipValueUpdate) {
-                    urlInput.value = '';
-                    urlInput.placeholder = 'Select provider type';
-                    modelInput.placeholder = 'Select provider type';
-                }
-                helpText.textContent = 'Select a provider type to see recommended URL';
-                modelDatalist.innerHTML = '';
-                modelHelp.textContent = 'Select a provider type to see available models';
-                tokenInput.required = false;
-                tokenInput.placeholder = 'Optional';
-                tokenRequired.style.display = 'none';
-                tokenOptional.style.display = 'inline';
-                tokenHelp.textContent = 'Enter API token for selected provider';
             }
         }
 
@@ -280,7 +226,6 @@
             document.getElementById('modalTitle').textContent = 'Add New Agent';
             document.getElementById('agentForm').reset();
             document.getElementById('agentId').value = '';
-            // Reset provider selection
             updateProviderUrl();
             document.getElementById('agentModal').classList.remove('hidden');
         }
@@ -290,7 +235,6 @@
         }
 
         function editAgent(id) {
-            // Fetch agent data and populate form
             fetch(`/api/agents/${id}`)
                 .then(response => response.json())
                 .then(agent => {
@@ -300,22 +244,10 @@
                     document.getElementById('api_token').value = agent.api_token;
                     document.getElementById('model_name').value = agent.model_name;
                     document.getElementById('timeout_seconds').value = agent.timeout_seconds;
-                    
-                    // Set provider type
-                    document.getElementById('provider_type').value = agent.provider_type || detectProviderType(agent.provider_url);
-                    
-                    // Update UI helpers but DO NOT overwrite the specific URL and model
+                    document.getElementById('provider_type').value = agent.provider_type;
                     updateProviderUrl(true); 
-                    
-                    // Set the actual values from database
                     document.getElementById('provider_url').value = agent.provider_url;
-                    document.getElementById('model_name').value = agent.model_name;
-                    
                     document.getElementById('agentModal').classList.remove('hidden');
-                })
-                .catch(error => {
-                    console.error('Error fetching agent:', error);
-                    alert('Failed to load agent data');
                 });
         }
 
@@ -323,131 +255,54 @@
             fetch(`/api/agents/${id}`)
                 .then(response => response.json())
                 .then(agent => {
-                    // Remove ID to create new agent
-                    delete agent.id;
-                    // Add " - Copy" to name to indicate it's a duplicate
-                    agent.name = agent.name + " - Copy";
-                    
-                    // Show modal with duplicated data
                     document.getElementById('modalTitle').textContent = 'Duplicate Agent';
-                    
-                    // Populate form with duplicated data
                     document.getElementById('agentId').value = '';
-                    document.getElementById('name').value = agent.name;
+                    document.getElementById('name').value = agent.name + " - Copy";
                     document.getElementById('api_token').value = agent.api_token;
                     document.getElementById('timeout_seconds').value = agent.timeout_seconds;
-                    
-                    // Set provider type and update UI
-                    document.getElementById('provider_type').value = agent.provider_type || detectProviderType(agent.provider_url);
+                    document.getElementById('provider_type').value = agent.provider_type;
                     updateProviderUrl(true);
-                    
-                    // Set the actual values from duplicated agent
                     document.getElementById('provider_url').value = agent.provider_url;
                     document.getElementById('model_name').value = agent.model_name;
-                    
                     document.getElementById('agentModal').classList.remove('hidden');
-                })
-                .catch(error => {
-                    console.error('Error fetching agent for duplication:', error);
-                    alert('Failed to load agent data for duplication');
                 });
-        }
-
-        function detectProviderType(url) {
-            if (url.includes('openai.com')) {
-                return 'openai';
-            } else if (url.includes('anthropic.com')) {
-                return 'anthropic';
-            } else if (url.includes('googleapis.com')) {
-                return 'google';
-            } else if (url.includes('localhost:11434') || url.includes('ollama')) {
-                return 'ollama';
-            } else {
-                return 'custom';
-            }
         }
 
         function deleteAgent(id) {
             if (confirm('Are you sure you want to delete this agent?')) {
-                fetch(`/api/agents/${id}`, {
-                    method: 'DELETE'
-                })
-                .then(response => {
-                    if (response.ok) {
-                        location.reload();
-                    } else {
-                        throw new Error('Failed to delete agent');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error deleting agent:', error);
-                    alert('Failed to delete agent');
-                });
+                fetch(`/api/agents/${id}`, { method: 'DELETE' }).then(() => location.reload());
             }
         }
 
         function pingAgent(id) {
             const card = document.querySelector(`[data-agent-id="${id}"]`);
-            card.classList.add('loading');
-            
-            fetch(`/api/agents/${id}/ping`, {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') {
-                    alert('Connection successful!');
-                } else {
-                    alert('Connection failed: ' + (data.error || 'Unknown error'));
-                }
-            })
-            .catch(error => {
-                console.error('Error pinging agent:', error);
-                alert('Connection failed: ' + error.message);
-            })
-            .finally(() => {
-                card.classList.remove('loading');
-            });
+            card.style.opacity = '0.5';
+            fetch(`/api/agents/${id}/ping`, { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    alert(data.status === 'ok' ? 'Connection successful!' : 'Connection failed: ' + (data.error || 'Unknown error'));
+                })
+                .finally(() => card.style.opacity = '1');
         }
 
-        // Form submission
         document.getElementById('agentForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
             const formData = new FormData(this);
             const agentData = Object.fromEntries(formData.entries());
+            agentData.timeout_seconds = parseInt(agentData.timeout_seconds);
             const agentId = document.getElementById('agentId').value;
-            const isEdit = agentId !== '';
-            
-            const url = isEdit ? `/api/agents/${agentId}` : '/api/agents';
-            const method = isEdit ? 'PUT' : 'POST';
+            const url = agentId ? `/api/agents/${agentId}` : '/api/agents';
+            const method = agentId ? 'PUT' : 'POST';
             
             fetch(url, {
                 method: method,
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(agentData)
-            })
-            .then(response => {
-                if (response.ok) {
-                    hideModal();
-                    location.reload();
-                } else {
-                    throw new Error('Failed to save agent');
-                }
-            })
-            .catch(error => {
-                console.error('Error saving agent:', error);
-                alert('Failed to save agent: ' + error.message);
-            });
+            }).then(() => location.reload());
         });
 
-        // Close modal when clicking outside
         document.getElementById('agentModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                hideModal();
-            }
+            if (e.target === this) hideModal();
         });
     </script>
 </body>

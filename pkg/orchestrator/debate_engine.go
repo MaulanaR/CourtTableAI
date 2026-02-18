@@ -67,7 +67,7 @@ func (de *DebateEngine) broadcast(discussionID int64, data interface{}) {
 }
 
 // RunDebate starts a debate session with the specified topic and agents
-func (de *DebateEngine) RunDebate(ctx context.Context, topic string, agentIDs []int64, moderatorID *int64) (*models.Discussion, error) {
+func (de *DebateEngine) RunDebate(ctx context.Context, topic string, agentIDs []int64, moderatorID *int64, maxRounds int, language string, maxCharLimit int) (*models.Discussion, error) {
 	// 1. Verify agents exist BEFORE creating discussion
 	agents, err := de.getAgents(agentIDs)
 	if err != nil {
@@ -84,10 +84,13 @@ func (de *DebateEngine) RunDebate(ctx context.Context, topic string, agentIDs []
 
 	// 2. Create discussion record
 	discussion := &models.Discussion{
-		Topic:       topic,
-		Status:      "running",
-		AgentIDs:    models.JSONSlice[int64](agentIDs),
-		ModeratorID: moderatorID,
+		Topic:        topic,
+		Status:       "running",
+		AgentIDs:     models.JSONSlice[int64](agentIDs),
+		ModeratorID:  moderatorID,
+		MaxRounds:    maxRounds,
+		Language:     language,
+		MaxCharLimit: maxCharLimit,
 	}
 
 	if err := de.db.InsertDiscussion(discussion); err != nil {
@@ -114,13 +117,13 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 		de.db.UpdateDiscussion(discussion)
 	}()
 
-	log.Printf("Starting debate for discussion %d with %d agents%s",
+	log.Printf("Starting debate for discussion %d with %d agents%s (Max Rounds: %d, Language: %s, Max Chars: %d)",
 		discussion.ID, len(agents), func() string {
 			if moderator != nil {
 				return fmt.Sprintf(" and moderator: %s", moderator.Name)
 			}
 			return ""
-		}())
+		}(), discussion.MaxRounds, discussion.Language, discussion.MaxCharLimit)
 
 	// Moderator opens the discussion if available
 	if moderator != nil {
@@ -132,7 +135,10 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 	// Build debate context from previous responses
 	var debateContext strings.Builder
 	roundCount := 1
-	maxRounds := 3 // Maximum number of debate rounds
+	maxRounds := discussion.MaxRounds
+	if maxRounds <= 0 {
+		maxRounds = 3 // Default fallback
+	}
 
 	for round := 1; round <= maxRounds; round++ {
 		roundActive := false
@@ -141,7 +147,10 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 		// Each agent responds in sequence
 		for i, agent := range agents {
 			// Build prompt for this agent
-			prompt := de.buildPrompt(discussion.Topic, round, i+1, len(agents))
+			prompt := de.buildPrompt(discussion)
+			if round > 1 {
+				prompt = de.buildRoundPrompt(discussion, round, i+1, len(agents))
+			}
 
 			// Call the agent
 			response, err := de.agentClient.CallAgent(ctx, agent, prompt, debateContext.String())
@@ -165,7 +174,14 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 				logEntry.Content = fmt.Sprintf("Error: %s", response.ErrorMessage)
 			} else {
 				log.Printf("Agent %s responded successfully (%d ms)", agent.Name, response.ResponseTime)
-				logEntry.Content = response.Content
+				content := response.Content
+				
+				// Strictly enforce character limit (hard truncation)
+				if len(content) > discussion.MaxCharLimit {
+					content = content[:discussion.MaxCharLimit]
+				}
+				
+				logEntry.Content = content
 				roundActive = true
 
 				// Add to debate context for next agents
@@ -174,7 +190,7 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 				}
 				debateContext.WriteString(fmt.Sprintf("Round %d - Agent %s (%d):", round, agent.Name, agent.ID))
 				debateContext.WriteString("\n")
-				debateContext.WriteString(response.Content)
+				debateContext.WriteString(content)
 			}
 
 			// Save the log entry
@@ -228,26 +244,39 @@ func (de *DebateEngine) executeDebate(ctx context.Context, discussion *models.Di
 	log.Printf("Debate completed for discussion %d", discussion.ID)
 }
 
-// buildPrompt creates a prompt for an agent
-func (de *DebateEngine) buildPrompt(topic string, round int, agentNum int, totalAgents int) string {
+// buildPrompt creates a prompt for an agent's first round
+func (de *DebateEngine) buildPrompt(discussion *models.Discussion) string {
 	var prompt strings.Builder
 
-	if round == 1 {
-		prompt.WriteString(fmt.Sprintf("You are Agent #%d in a multi-agent debate about: \"%s\"\n\n", agentNum, topic))
-		prompt.WriteString("This is the first round. Please provide your initial perspective on this topic.\n\n")
-		prompt.WriteString("Guidelines:\n")
-		prompt.WriteString("- Provide a clear, thoughtful response\n")
-		prompt.WriteString("- Consider multiple perspectives\n")
-		prompt.WriteString("- Be specific and provide reasoning\n")
-	} else {
-		prompt.WriteString(fmt.Sprintf("This is Round %d of the debate about: \"%s\"\n\n", round, topic))
-		prompt.WriteString(fmt.Sprintf("You are Agent #%d. Please respond to the previous arguments from other agents.\n\n", agentNum))
-		prompt.WriteString("Guidelines:\n")
-		prompt.WriteString("- Address specific points made by other agents\n")
-		prompt.WriteString("- Defend or modify your position based on new information\n")
-		prompt.WriteString("- Find common ground where possible\n")
-		prompt.WriteString("- Move the discussion toward resolution\n")
-	}
+	prompt.WriteString(fmt.Sprintf("You are an agent in a multi-agent debate about: \"%s\"\n\n", discussion.Topic))
+	prompt.WriteString(fmt.Sprintf("Language of discussion: %s\n", discussion.Language))
+	prompt.WriteString(fmt.Sprintf("Maximum response length: %d characters\n\n", discussion.MaxCharLimit))
+	prompt.WriteString("This is the first round. Please provide your initial perspective on this topic.\n\n")
+	prompt.WriteString("Guidelines:\n")
+	prompt.WriteString("- Provide a clear, thoughtful response\n")
+	prompt.WriteString("- Consider multiple perspectives\n")
+	prompt.WriteString("- Be specific and provide reasoning\n")
+	prompt.WriteString(fmt.Sprintf("- DO NOT EXCEED %d CHARACTERS\n", discussion.MaxCharLimit))
+	prompt.WriteString(fmt.Sprintf("- RESPOND ONLY IN %s\n", strings.ToUpper(discussion.Language)))
+
+	return prompt.String()
+}
+
+// buildRoundPrompt creates a prompt for subsequent rounds
+func (de *DebateEngine) buildRoundPrompt(discussion *models.Discussion, round int, agentNum int, totalAgents int) string {
+	var prompt strings.Builder
+
+	prompt.WriteString(fmt.Sprintf("This is Round %d of the debate about: \"%s\"\n\n", round, discussion.Topic))
+	prompt.WriteString(fmt.Sprintf("Language of discussion: %s\n", discussion.Language))
+	prompt.WriteString(fmt.Sprintf("Maximum response length: %d characters\n\n", discussion.MaxCharLimit))
+	prompt.WriteString(fmt.Sprintf("You are Agent #%d. Please respond to the previous arguments from other agents.\n\n", agentNum))
+	prompt.WriteString("Guidelines:\n")
+	prompt.WriteString("- Address specific points made by other agents\n")
+	prompt.WriteString("- Defend or modify your position based on new information\n")
+	prompt.WriteString("- Find common ground where possible\n")
+	prompt.WriteString("- Move the discussion toward resolution\n")
+	prompt.WriteString(fmt.Sprintf("- DO NOT EXCEED %d CHARACTERS\n", discussion.MaxCharLimit))
+	prompt.WriteString(fmt.Sprintf("- RESPOND ONLY IN %s\n", strings.ToUpper(discussion.Language)))
 
 	return prompt.String()
 }
@@ -255,7 +284,7 @@ func (de *DebateEngine) buildPrompt(topic string, round int, agentNum int, total
 // callModerator handles moderator interactions
 func (de *DebateEngine) callModerator(ctx context.Context, discussion *models.Discussion, moderator *models.Agent, moderatorType string, contextStr string) bool {
 	// Build moderator prompt based on type
-	prompt := de.buildModeratorPrompt(discussion.Topic, moderatorType, contextStr)
+	prompt := de.buildModeratorPrompt(discussion, moderatorType, contextStr)
 
 	response, err := de.agentClient.CallAgent(ctx, moderator, prompt, "")
 
@@ -293,23 +322,28 @@ func (de *DebateEngine) callModerator(ctx context.Context, discussion *models.Di
 }
 
 // buildModeratorPrompt creates prompts for different moderator interactions
-func (de *DebateEngine) buildModeratorPrompt(topic string, moderatorType string, contextStr string) string {
+func (de *DebateEngine) buildModeratorPrompt(discussion *models.Discussion, moderatorType string, contextStr string) string {
+	topic := discussion.Topic
+	lang := discussion.Language
+	limit := discussion.MaxCharLimit
+
+	basePrompt := fmt.Sprintf("You are the moderator for a multi-agent debate on: \"%s\"\nLanguage: %s\nMax length: %d characters\n\n", topic, lang, limit)
+
 	switch moderatorType {
 	case "opening":
-		return fmt.Sprintf(`You are the moderator for a multi-agent debate on the topic: "%s"
-
-Your role is to:
+		return basePrompt + `Your role is to:
 1. Welcome participants and set the tone
 2. Briefly explain the debate format and rules
 3. Remind agents to be respectful and constructive
 4. Introduce the topic and initial considerations
 
-Please provide a concise opening statement (2-3 paragraphs).`, topic)
+Please provide a concise opening statement (2-3 paragraphs). 
+RESPOND ONLY IN ` + strings.ToUpper(lang) + `. DO NOT EXCEED ` + fmt.Sprint(limit) + ` CHARACTERS.`
 
 	case "interim":
-		return fmt.Sprintf(`You are the moderator for a multi-agent debate. An agent just responded with:
+		return basePrompt + `An agent just responded with:
 
-"%s"
+"` + contextStr + `"
 
 Your role is to:
 1. Briefly acknowledge the key points made
@@ -317,12 +351,11 @@ Your role is to:
 3. Encourage the next agent to build upon or challenge these points
 4. Maintain a respectful and constructive tone
 
-Please provide a brief moderation comment (1-2 paragraphs).`, contextStr)
+Please provide a brief moderation comment (1-2 paragraphs).
+RESPOND ONLY IN ` + strings.ToUpper(lang) + `. DO NOT EXCEED ` + fmt.Sprint(limit) + ` CHARACTERS.`
 
 	case "round_summary":
-		return fmt.Sprintf(`You are the moderator for a multi-agent debate on: "%s"
-
-%s
+		return basePrompt + `Round completed.
 
 Your role is to:
 1. Summarize the key arguments and perspectives from this round
@@ -330,21 +363,21 @@ Your role is to:
 3. Point out any logical fallacies or particularly strong arguments
 4. Set up the next round of discussion
 
-Please provide a concise round summary (2-3 paragraphs).`, topic, contextStr)
+Please provide a concise round summary (2-3 paragraphs).
+RESPOND ONLY IN ` + strings.ToUpper(lang) + `. DO NOT EXCEED ` + fmt.Sprint(limit) + ` CHARACTERS.`
 
 	case "closing":
-		return fmt.Sprintf(`You are the moderator for a multi-agent debate on: "%s"
-
-The debate has concluded. Your role is to:
+		return basePrompt + `The debate has concluded. Your role is to:
 1. Provide a balanced summary of all positions presented
 2. Identify the strongest arguments and key insights
 3. Highlight areas of consensus and remaining disagreement
 4. Offer final thoughts on the topic and the quality of the discussion
 
-Please provide a comprehensive closing statement (3-4 paragraphs).`, topic)
+Please provide a comprehensive closing statement (3-4 paragraphs).
+RESPOND ONLY IN ` + strings.ToUpper(lang) + `. DO NOT EXCEED ` + fmt.Sprint(limit) + ` CHARACTERS.`
 
 	default:
-		return fmt.Sprintf("You are moderating a debate on: %s\n\nCurrent context: %s\n\nPlease provide appropriate moderation.", topic, contextStr)
+		return basePrompt + "Please provide appropriate moderation in " + lang + ". DO NOT EXCEED " + fmt.Sprint(limit) + " CHARACTERS."
 	}
 }
 
@@ -507,7 +540,7 @@ func (de *DebateEngine) RetryFailedAgent(ctx context.Context, discussionID int64
 	}
 
 	// Retry the agent call
-	prompt := de.buildPrompt(discussion.Topic, 1, 1, 1) // Simplified prompt for retry
+	prompt := de.buildPrompt(discussion) // Simplified prompt for retry
 	response, err := de.agentClient.CallAgent(ctx, agent, prompt, contextBuilder.String())
 
 	// Create new log entry

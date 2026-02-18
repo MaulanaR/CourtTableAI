@@ -24,18 +24,28 @@ func (t *TemplateRenderer) Render(w io.Writer, name string, data interface{}, c 
 
 func loadTemplates() *template.Template {
 	templ := template.New("").Funcs(template.FuncMap{
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"min": func(a, b int) int {
+			if a < b {
+				return a
+			}
+			return b
+		},
 		"substr": func(s string, start int, length ...int) string {
+			runes := []rune(s)
 			if start < 0 {
 				start = 0
 			}
-			if len(s) == 0 || start >= len(s) {
+			if len(runes) == 0 || start >= len(runes) {
 				return ""
 			}
-			end := len(s)
-			if len(length) > 0 && start+length[0] < len(s) {
+			end := len(runes)
+			if len(length) > 0 && start+length[0] < len(runes) {
 				end = start + length[0]
 			}
-			return s[start:end]
+			return string(runes[start:end])
 		},
 		"upper": func(s string) string {
 			return strings.ToUpper(s)

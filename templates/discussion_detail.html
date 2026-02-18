@@ -6,16 +6,13 @@
     <title>Discussion Detail - Court Table AI</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/css/stripe.css">
     <style>
-        .loading {
-            opacity: 0.5;
-            pointer-events: none;
-        }
         .agent-response {
-            animation: fadeIn 0.5s ease-in;
+            animation: fadeIn 0.4s ease-out;
         }
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
+            from { opacity: 0; transform: translateY(4px); }
             to { opacity: 1; transform: translateY(0); }
         }
         .typing-indicator::after {
@@ -27,195 +24,223 @@
             40% { opacity: 1; }
             60% { opacity: 1; }
         }
+        #transcript-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        #transcript-container::-webkit-scrollbar-track {
+            background: #f6f9fc;
+        }
+        #transcript-container::-webkit-scrollbar-thumb {
+            background: #e6ebf1;
+            border-radius: 3px;
+        }
     </style>
 </head>
-<body class="bg-gray-50">
-    <nav class="bg-blue-600 text-white shadow-lg">
+<body class="bg-[#f6f9fc]">
+    <nav class="stripe-nav sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
-                    <h1 class="text-xl font-bold">Court Table AI - Discussion Detail</h1>
+                    <span class="text-[#6772e5] font-bold text-2xl tracking-tight">CourtTableAI</span>
                 </div>
-                <div class="flex items-center space-x-4">
-                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Dashboard</a>
-                    <a href="/agents" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Agents</a>
-                    <a href="/discussions" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Discussions</a>
+                <div class="flex items-center">
+                    <a href="/" class="stripe-nav-link">Dashboard</a>
+                    <a href="/agents" class="stripe-nav-link">Agents</a>
+                    <a href="/discussions" class="stripe-nav-link">Discussions</a>
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <!-- Discussion Header -->
-            <div class="bg-white shadow rounded-lg p-6 mb-6">
-                <div class="flex justify-between items-start">
-                    <div class="flex-1">
-                        <h2 class="text-2xl font-bold text-gray-900 mb-2">{{ .Discussion.Topic }}</h2>
-                        <div class="flex items-center space-x-4 text-sm text-gray-500">
-                            <span>ID: {{ .Discussion.ID }}</span>
-                            <span>Created: {{ .Discussion.CreatedAt.Format "Jan 02, 2006 15:04:05" }}</span>
-                            <span>Agents: {{ len .Discussion.AgentIDs }}</span>
-                        </div>
+    <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <!-- Breadcrumbs -->
+        <nav class="flex mb-6 text-sm" aria-label="Breadcrumb">
+            <ol class="inline-flex items-center space-x-1 md:space-x-3">
+                <li class="inline-flex items-center">
+                    <a href="/discussions" class="text-[#6b7c93] hover:text-[#6772e5]">Discussions</a>
+                </li>
+                <li>
+                    <div class="flex items-center">
+                        <svg class="w-3 h-3 text-[#8898aa] mx-1" aria-hidden="true" fill="none" viewBox="0 0 6 10"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 9 4-4-4-4"/></svg>
+                        <span class="text-[#32325d] font-semibold ml-1">#{{ .Discussion.ID }}</span>
                     </div>
-                    <div class="flex items-center space-x-2">
-                        <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full 
-                            {{ if eq .Discussion.Status "running" }}bg-yellow-100 text-yellow-800 animate-pulse
-                            {{ else if eq .Discussion.Status "completed" }}bg-green-100 text-green-800
-                            {{ else }}bg-red-100 text-red-800{{ end }}">
+                </li>
+            </ol>
+        </nav>
+
+        <!-- Discussion Header -->
+        <div class="stripe-card p-8 mb-8">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                        <span class="stripe-badge {{ if eq .Discussion.Status "running" }}stripe-badge-warning animate-pulse{{ else if eq .Discussion.Status "completed" }}stripe-badge-success{{ else }}stripe-badge-danger{{ end }}">
                             {{ .Discussion.Status }}
                         </span>
-                        {{ if eq .Discussion.Status "running" }}
-                        <button onclick="stopDiscussion({{ .Discussion.ID }})" class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm">
-                            Stop
-                        </button>
-                        {{ end }}
+                        <h1 class="text-2xl font-bold text-[#32325d]">{{ .Discussion.Topic }}</h1>
                     </div>
+                    <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-[#6b7c93]">
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                            {{ .Discussion.CreatedAt.Format "Jan 02, 2006 15:04" }}
+                        </div>
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path></svg>
+                            {{ .Discussion.Language }}
+                        </div>
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            {{ .Discussion.MaxRounds }} Rounds
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3 self-end md:self-auto">
+                    {{ if eq .Discussion.Status "running" }}
+                    <button onclick="stopDiscussion({{ .Discussion.ID }})" class="bg-white border border-[#e6ebf1] text-[#e13d3d] font-bold px-4 py-2 rounded shadow-sm hover:bg-[#fcebeb] transition-colors">
+                        Stop Debate
+                    </button>
+                    {{ end }}
+                    <button onclick="location.reload()" class="p-2 text-[#6b7c93] hover:text-[#6772e5] bg-white border border-[#e6ebf1] rounded shadow-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    </button>
                 </div>
             </div>
+        </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <!-- Discussion Logs -->
-                <div class="lg:col-span-3">
-                    <div class="bg-white shadow rounded-lg">
-                        <div class="px-6 py-4 border-b border-gray-200">
-                            <h3 class="text-lg font-medium text-gray-900">Debate Transcript</h3>
-                        </div>
-                        <div id="transcript-container" class="divide-y divide-gray-200 max-h-96 overflow-y-auto">
-                            {{ if .Logs }}
-                            {{ range .Logs }}
-                            <div class="p-6 agent-response {{ if .IsModerator }}bg-blue-50{{ end }}" data-log-id="{{ .ID }}">
-                                <div class="flex items-start space-x-3">
-                                    <div class="flex-shrink-0">
-                                        <div class="w-8 h-8 {{ if .IsModerator }}bg-purple-500{{ else }}bg-blue-500{{ end }} rounded-full flex items-center justify-center text-white text-sm font-medium">
-                                            {{ if .IsModerator }}M{{ else }}
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- Transcript Column -->
+            <div class="lg:col-span-3 space-y-6">
+                <div class="stripe-card overflow-hidden">
+                    <div class="px-6 py-4 border-b border-[#e6ebf1] bg-[#f6f9fc] flex justify-between items-center">
+                        <h2 class="text-sm font-bold text-[#8898aa] uppercase tracking-wider">Live Transcript</h2>
+                        <span id="response-count" class="text-xs font-bold text-[#6772e5] bg-[#e6ebf1] px-2 py-0.5 rounded-full">{{ len .Logs }} Messages</span>
+                    </div>
+                    <div id="transcript-container" class="divide-y divide-[#e6ebf1] bg-white overflow-y-auto" style="max-height: 700px;">
+                        {{ if .Logs }}
+                        {{ range .Logs }}
+                        <div class="p-8 agent-response hover:bg-[#fafcfe] transition-colors {{ if .IsModerator }}bg-[#f8f9ff]{{ end }}" data-log-id="{{ .ID }}">
+                            <div class="flex items-start gap-5">
+                                <div class="flex-shrink-0">
+                                    <div class="w-10 h-10 {{ if .IsModerator }}bg-[#6772e5]{{ else }}bg-[#32325d]{{ end }} rounded-full flex items-center justify-center text-white font-bold shadow-sm">
+                                        {{ if .IsModerator }}M{{ else }}
                                             {{ $logAgentID := .AgentID }}
-                                            {{ $agentName := "" }}
+                                            {{ $initial := "A" }}
                                             {{ range $.Agents }}
-                                                {{ if eq .ID $logAgentID }}{{ $agentName = .Name }}{{ end }}
+                                                {{ if eq .ID $logAgentID }}{{ $initial = substr .Name 0 1 | upper }}{{ end }}
                                             {{ end }}
-                                            {{ substr $agentName 0 1 | upper }}
-                                            {{ end }}
-                                        </div>
-                                    </div>
-                                    <div class="flex-1">
-                                        <div class="flex items-center justify-between">
-                                            <div>
-                                                <span class="font-medium text-gray-900">
-                                                    {{ if .IsModerator }}
-                                                        Moderator
-                                                        {{ $moderatorName := "Unknown" }}
-                                                        {{ $logAgentID := .AgentID }}
-                                                        {{ range $.Agents }}
-                                                            {{ if eq .ID $logAgentID }}{{ $moderatorName = .Name }}{{ end }}
-                                                        {{ end }}
-                                                        ({{ $moderatorName }})
-                                                    {{ else }}
-                                                        {{ $agentName := "Unknown" }}
-                                                        {{ $logAgentID := .AgentID }}
-                                                        {{ range $.Agents }}
-                                                            {{ if eq .ID $logAgentID }}{{ $agentName = .Name }}{{ end }}
-                                                        {{ end }}
-                                                        {{ $agentName }}
-                                                    {{ end }}
-                                                </span>
-                                                <span class="text-sm text-gray-500 ml-2">{{ .CreatedAt.Format "15:04:05" }}</span>
-                                                {{ if .IsModerator }}
-                                                <span class="ml-2 px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Moderator</span>
-                                                {{ end }}
-                                            </div>
-                                            <div class="flex items-center space-x-2">
-                                                <span class="px-2 py-1 text-xs rounded-full 
-                                                    {{ if eq .Status "success" }}bg-green-100 text-green-800
-                                                    {{ else if eq .Status "timeout" }}bg-yellow-100 text-yellow-800
-                                                    {{ else }}bg-red-100 text-red-800{{ end }}">
-                                                    {{ .Status }}
-                                                </span>
-                                                <span class="text-xs text-gray-500">{{ .ResponseTime }}ms</span>
-                                                {{ if and (ne .Status "success") (not .IsModerator) }}
-                                                <button onclick="retryAgent({{ $.Discussion.ID }}, {{ .AgentID }})" 
-                                                        class="text-blue-600 hover:text-blue-900 text-sm">
-                                                    Retry
-                                                </button>
-                                                {{ end }}
-                                            </div>
-                                        </div>
-                                        <div class="mt-2 text-gray-700 whitespace-pre-wrap">{{ .Content }}</div>
+                                            {{ $initial }}
+                                        {{ end }}
                                     </div>
                                 </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold text-[#32325d]">
+                                                {{ if .IsModerator }}
+                                                    Moderator 
+                                                    {{ $modName := "" }}{{ $logAgentID := .AgentID }}{{ range $.Agents }}{{ if eq .ID $logAgentID }}{{ $modName = .Name }}{{ end }}{{ end }}
+                                                    <span class="text-xs font-medium text-[#6b7c93] ml-1">({{ $modName }})</span>
+                                                {{ else }}
+                                                    {{ $agentName := "" }}{{ $logAgentID := .AgentID }}{{ range $.Agents }}{{ if eq .ID $logAgentID }}{{ $agentName = .Name }}{{ end }}{{ end }}
+                                                    {{ $agentName }}
+                                                {{ end }}
+                                            </span>
+                                            <span class="text-xs text-[#8898aa]">{{ .CreatedAt.Format "15:04:05" }}</span>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-[10px] font-bold px-2 py-0.5 rounded border {{ if eq .Status "success" }}text-[#24b47e] border-[#24b47e] bg-[#e3f9eb]{{ else }}text-[#e13d3d] border-[#e13d3d] bg-[#fcebeb]{{ end }}">
+                                                {{ upper .Status }}
+                                            </span>
+                                            <span class="text-xs text-[#8898aa]">{{ .ResponseTime }}ms</span>
+                                            {{ if and (ne .Status "success") (not .IsModerator) }}
+                                            <button onclick="retryAgent({{ $.Discussion.ID }}, {{ .AgentID }})" class="text-xs font-bold text-[#6772e5] hover:underline">Retry</button>
+                                            {{ end }}
+                                        </div>
+                                    </div>
+                                    <div class="text-[#4f566b] text-[15px] leading-relaxed whitespace-pre-wrap">{{ .Content }}</div>
+                                </div>
                             </div>
-                            {{ end }}
-                            {{ else }}
-                            <div class="p-6 text-center text-gray-500">
-                                {{ if eq .Discussion.Status "running" }}
-                                <div class="typing-indicator">Waiting for responses</div>
-                                {{ else }}
-                                <p>No responses recorded</p>
-                                {{ end }}
+                        </div>
+                        {{ end }}
+                        {{ else }}
+                        <div id="no-logs" class="p-20 text-center">
+                            <div class="flex flex-col items-center">
+                                <div class="typing-indicator text-[#6772e5] font-bold mb-2">Waiting for responses</div>
+                                <p class="text-[#8898aa] text-sm">Debate is starting up...</p>
                             </div>
-                            {{ end }}
+                        </div>
+                        {{ end }}
+                    </div>
+                </div>
+
+                <!-- Final Summary (Full Width at Bottom of main col) -->
+                {{ if .Discussion.FinalSummary }}
+                <div class="stripe-card overflow-hidden">
+                    <div class="px-6 py-4 border-b border-[#e6ebf1] bg-[#f6f9fc]">
+                        <h2 class="text-sm font-bold text-[#8898aa] uppercase tracking-wider">Final Debate Summary</h2>
+                    </div>
+                    <div class="p-8 text-[#4f566b] text-[15px] leading-relaxed whitespace-pre-wrap">{{ .Discussion.FinalSummary }}</div>
+                </div>
+                {{ end }}
+            </div>
+
+            <!-- Sidebar Column -->
+            <div class="lg:col-span-1 space-y-8">
+                <!-- Participants List -->
+                <div class="stripe-card p-6">
+                    <h3 class="text-sm font-bold text-[#8898aa] uppercase tracking-wider mb-5">Participants</h3>
+                    
+                    {{ if .Discussion.ModeratorID }}
+                    <div class="mb-6">
+                        <p class="text-[11px] font-bold text-[#8898aa] uppercase mb-3">Moderator</p>
+                        {{ $modID := .Discussion.ModeratorID }}
+                        {{ range .Agents }}{{ if isModerator .ID $modID }}
+                        <div class="flex items-center gap-3 p-2 rounded-lg bg-[#f8f9ff]">
+                            <div class="w-8 h-8 bg-[#6772e5] rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">M</div>
+                            <div class="min-w-0">
+                                <p class="text-sm font-bold text-[#32325d] truncate">{{ .Name }}</p>
+                                <p class="text-xs text-[#8898aa] truncate">{{ .ModelName }}</p>
+                            </div>
+                        </div>
+                        {{ end }}{{ end }}
+                    </div>
+                    {{ end }}
+                    
+                    <div>
+                        <p class="text-[11px] font-bold text-[#8898aa] uppercase mb-3">Debaters</p>
+                        <div class="space-y-3">
+                            {{ range .Discussion.AgentIDs }}
+                            {{ $currentAgentID := . }}{{ range $.Agents }}{{ if eq .ID $currentAgentID }}
+                            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-[#f6f9fc] transition-colors group">
+                                <div class="w-8 h-8 bg-[#32325d] group-hover:bg-[#6772e5] transition-colors rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
+                                    {{ substr .Name 0 1 | upper }}
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-sm font-bold text-[#32325d] truncate">{{ .Name }}</p>
+                                    <p class="text-xs text-[#8898aa] truncate">{{ .ModelName }}</p>
+                                </div>
+                            </div>
+                            {{ end }}{{ end }}{{ end }}
                         </div>
                     </div>
                 </div>
 
-                <!-- Sidebar -->
-                <div class="lg:col-span-1">
-                    <!-- Participants -->
-                    <div class="bg-white shadow rounded-lg p-6 mb-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Participants</h3>
-                        
-                        {{ if .Discussion.ModeratorID }}
-                        <div class="mb-4">
-                            <h4 class="text-sm font-medium text-gray-700 mb-2">Moderator</h4>
-                            {{ $modID := .Discussion.ModeratorID }}
-                            {{ range .Agents }}
-                                {{ if isModerator .ID $modID }}
-                                <div class="flex items-center space-x-2">
-                                    <div class="w-6 h-6 bg-purple-400 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                                        M
-                                    </div>
-                                    <div class="flex-1">
-                                        <div class="text-sm font-medium text-gray-900">{{ .Name }}</div>
-                                        <div class="text-xs text-gray-500">{{ .ModelName }}</div>
-                                    </div>
-                                </div>
-                                {{ end }}
-                            {{ end }}
+                <!-- Session Settings Info -->
+                <div class="stripe-card p-6">
+                    <h3 class="text-sm font-bold text-[#8898aa] uppercase tracking-wider mb-4">Configuration</h3>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-[#6b7c93]">Language</span>
+                            <span class="font-bold text-[#32325d]">{{ .Discussion.Language }}</span>
                         </div>
-                        {{ end }}
-                        
-                        <div>
-                            <h4 class="text-sm font-medium text-gray-700 mb-2">Debate Participants</h4>
-                            <div class="space-y-3">
-                                {{ range .Discussion.AgentIDs }}
-                                {{ $currentAgentID := . }}
-                                {{ $agent := "" }}
-                                {{ range $.Agents }}
-                                    {{ if eq .ID $currentAgentID }}{{ $agent = . }}{{ end }}
-                                {{ end }}
-                                {{ if $agent }}
-                                <div class="flex items-center space-x-2">
-                                    <div class="w-6 h-6 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                                        {{ substr $agent.Name 0 1 | upper }}
-                                    </div>
-                                    <div class="flex-1">
-                                        <div class="text-sm font-medium text-gray-900">{{ $agent.Name }}</div>
-                                        <div class="text-xs text-gray-500">{{ $agent.ModelName }}</div>
-                                    </div>
-                                </div>
-                                {{ end }}
-                                {{ end }}
-                            </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-[#6b7c93]">Max Rounds</span>
+                            <span class="font-bold text-[#32325d]">{{ .Discussion.MaxRounds }}</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-[#6b7c93]">Char Limit</span>
+                            <span class="font-bold text-[#32325d]">{{ .Discussion.MaxCharLimit }}</span>
                         </div>
                     </div>
-
-                    <!-- Summary -->
-                    {{ if .Discussion.FinalSummary }}
-                    <div class="bg-white shadow rounded-lg p-6">
-                        <h3 class="text-lg font-medium text-gray-900 mb-4">Summary</h3>
-                        <div class="text-sm text-gray-700 whitespace-pre-wrap">{{ .Discussion.FinalSummary }}</div>
-                    </div>
-                    {{ end }}
                 </div>
             </div>
         </div>
