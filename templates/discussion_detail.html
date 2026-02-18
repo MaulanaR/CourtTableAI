@@ -6,6 +6,9 @@
     <title>Discussion Detail - Court Table AI</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <link rel="stylesheet" href="/static/css/stripe.css">
     <style>
         .agent-response {
@@ -156,7 +159,7 @@
                                             {{ end }}
                                         </div>
                                     </div>
-                                    <div class="text-[#4f566b] text-[15px] leading-relaxed whitespace-pre-wrap">{{ .Content }}</div>
+                                    <div class="text-[#4f566b] text-[15px] leading-relaxed markdown-content">{{ .Content }}</div>
                                 </div>
                             </div>
                         </div>
@@ -250,6 +253,36 @@
         const discussionId = {{ .Discussion.ID }};
         const currentStatus = "{{ .Discussion.Status }}";
 
+        // Initialize marked with highlight.js
+        marked.setOptions({
+            highlight: function(code, lang) {
+                const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                return hljs.highlight(code, { language }).value;
+            },
+            headerIds: false,
+            mangle: false
+        });
+
+        function renderMarkdown(element) {
+            const rawContent = element.textContent;
+            element.innerHTML = marked.parse(rawContent);
+            
+            // Add copy buttons to code blocks
+            element.querySelectorAll('pre').forEach(pre => {
+                const button = document.createElement('button');
+                button.className = 'copy-btn';
+                button.textContent = 'Copy';
+                button.onclick = () => {
+                    const code = pre.querySelector('code').innerText;
+                    navigator.clipboard.writeText(code).then(() => {
+                        button.textContent = 'Copied!';
+                        setTimeout(() => button.textContent = 'Copy', 2000);
+                    });
+                };
+                pre.appendChild(button);
+            });
+        }
+
         function stopDiscussion(id) {
             if (confirm('Are you sure you want to stop this discussion?')) {
                 fetch(`/api/discussions/${id}/stop`, {
@@ -329,40 +362,43 @@
             if (placeholder) placeholder.remove();
 
             const logDiv = document.createElement('div');
-            logDiv.className = `p-6 agent-response ${log.is_moderator ? 'bg-blue-50' : ''}`;
+            logDiv.className = `p-8 agent-response hover:bg-[#fafcfe] transition-colors ${log.is_moderator ? 'bg-[#f8f9ff]' : ''}`;
             logDiv.setAttribute('data-log-id', log.id);
 
             const createdAt = new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 
+            // Calculate initial for SSE agent if not provided
+            const initial = agent.initial || agent.name.charAt(0).toUpperCase();
+
             logDiv.innerHTML = `
-                <div class="flex items-start space-x-3">
+                <div class="flex items-start gap-5">
                     <div class="flex-shrink-0">
-                        <div class="w-8 h-8 ${log.is_moderator ? 'bg-purple-500' : 'bg-blue-500'} rounded-full flex items-center justify-center text-white text-sm font-medium">
-                            ${log.is_moderator ? 'M' : agent.initial}
+                        <div class="w-10 h-10 ${log.is_moderator ? 'bg-[#6772e5]' : 'bg-[#32325d]'} rounded-full flex items-center justify-center text-white font-bold shadow-sm">
+                            ${log.is_moderator ? 'M' : initial}
                         </div>
                     </div>
-                    <div class="flex-1">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <span class="font-medium text-gray-900">
-                                    ${log.is_moderator ? 'Moderator (' + agent.name + ')' : agent.name}
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-[#32325d]">
+                                    ${log.is_moderator ? 'Moderator <span class="text-xs font-medium text-[#6b7c93] ml-1">(' + agent.name + ')</span>' : agent.name}
                                 </span>
-                                <span class="text-sm text-gray-500 ml-2">${createdAt}</span>
-                                ${log.is_moderator ? '<span class="ml-2 px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Moderator</span>' : ''}
+                                <span class="text-xs text-[#8898aa]">${createdAt}</span>
                             </div>
-                            <div class="flex items-center space-x-2">
-                                <span class="px-2 py-1 text-xs rounded-full ${log.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                                    ${log.status}
+                            <div class="flex items-center gap-3">
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${log.status === 'success' ? 'text-[#24b47e] border-[#24b47e] bg-[#e3f9eb]' : 'text-[#e13d3d] border-[#e13d3d] bg-[#fcebeb]'}">
+                                    ${log.status.toUpperCase()}
                                 </span>
-                                <span class="text-xs text-gray-500">${log.response_time}ms</span>
+                                <span class="text-xs text-[#8898aa]">${log.response_time}ms</span>
                             </div>
                         </div>
-                        <div class="mt-2 text-gray-700 whitespace-pre-wrap">${log.content}</div>
+                        <div class="text-[#4f566b] text-[15px] leading-relaxed markdown-content">${log.content}</div>
                     </div>
                 </div>
             `;
 
             container.appendChild(logDiv);
+            renderMarkdown(logDiv.querySelector('.markdown-content'));
             scrollToBottom();
         }
 
@@ -386,6 +422,8 @@
         }
 
         window.addEventListener('load', () => {
+            // Initial Markdown rendering for existing logs
+            document.querySelectorAll('.markdown-content').forEach(renderMarkdown);
             scrollToBottom();
             setupSSE();
         });
