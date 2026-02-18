@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discussions - Court Table AI</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .agent-response {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <nav class="bg-blue-600 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold">Court Table AI - Discussions</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Dashboard</a>
+                    <a href="/agents" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Agents</a>
+                    <a href="/discussions" class="px-3 py-2 rounded-md text-sm font-medium bg-blue-700">Discussions</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <!-- Header with Create Button -->
+            <div class="mb-6 flex justify-between items-center">
+                <h2 class="text-2xl font-bold text-gray-900">Multi-Agent Discussions</h2>
+                <button onclick="showCreateModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    Start New Discussion
+                </button>
+            </div>
+
+            <!-- Discussions List -->
+            <div class="bg-white shadow rounded-lg">
+                {{ if .Discussions }}
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Topic</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Agents</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            {{ range .Discussions }}
+                            <tr>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 max-w-md truncate" title="{{ .Topic }}">
+                                        {{ .Topic }}
+                                    </div>
+                                    {{ if .FinalSummary }}
+                                    <div class="text-sm text-gray-500 max-w-md truncate" title="{{ .FinalSummary }}">
+                                        {{ .FinalSummary }}
+                                    </div>
+                                    {{ end }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ len .AgentIDs }} agents
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                                        {{ if eq .Status "running" }}bg-yellow-100 text-yellow-800 animate-pulse
+                                        {{ else if eq .Status "completed" }}bg-green-100 text-green-800
+                                        {{ else }}bg-red-100 text-red-800{{ end }}">
+                                        {{ .Status }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    {{ .CreatedAt.Format "Jan 02, 15:04" }}
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <a href="/discussions/{{ .ID }}" class="text-blue-600 hover:text-blue-900 mr-3">View</a>
+                                    {{ if eq .Status "running" }}
+                                    <button onclick="stopDiscussion({{ .ID }})" class="text-red-600 hover:text-red-900">Stop</button>
+                                    {{ end }}
+                                </td>
+                            </tr>
+                            {{ end }}
+                        </tbody>
+                    </table>
+                </div>
+                {{ else }}
+                <div class="p-12 text-center">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                    </svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">No discussions</h3>
+                    <p class="mt-1 text-sm text-gray-500">Get started by creating a new multi-agent discussion.</p>
+                    <div class="mt-6">
+                        <button onclick="showCreateModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                            Start New Discussion
+                        </button>
+                    </div>
+                </div>
+                {{ end }}
+            </div>
+        </div>
+    </main>
+
+    <!-- Create Discussion Modal -->
+    <div id="createModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-hidden hidden">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <h3 class="text-lg font-medium text-gray-900">Start New Discussion</h3>
+                <form id="discussionForm" class="mt-4 space-y-4">
+                    <div>
+                        <label for="topic" class="block text-sm font-medium text-gray-700">Discussion Topic</label>
+                        <textarea id="topic" name="topic" required rows="3" 
+                                  placeholder="What topic should the AI agents debate about?"
+                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"></textarea>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Select Agents</label>
+                        <div class="space-y-2 max-h-48 overflow-y-auto border rounded-md p-2">
+                            {{ range .Agents }}
+                            <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                                <input type="checkbox" name="agent_ids" value="{{ .ID }}" 
+                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <div>
+                                    <span class="text-sm font-medium text-gray-900">{{ .Name }}</span>
+                                    <span class="text-xs text-gray-500 block">{{ .ModelName }}</span>
+                                </div>
+                            </label>
+                            {{ end }}
+                        </div>
+                        {{ if not .Agents }}
+                        <p class="text-sm text-gray-500">No agents available. <a href="/agents" class="text-blue-600 hover:text-blue-900">Create an agent first</a>.</p>
+                        {{ end }}
+                    </div>
+                    
+                    <div>
+                        <label for="moderator_id" class="block text-sm font-medium text-gray-700 mb-2">Moderator (Optional)</label>
+                        <select id="moderator_id" name="moderator_id" 
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2">
+                            <option value="">No Moderator</option>
+                            {{ range .Agents }}
+                            <option value="{{ .ID }}">{{ .Name }} ({{ .ModelName }})</option>
+                            {{ end }}
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500">Optional: Select an agent to moderate the discussion</p>
+                    </div>
+                    
+                    <div class="flex space-x-3 pt-4">
+                        <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700" {{ if not .Agents }}disabled{{ end }}>
+                            Start Discussion
+                        </button>
+                        <button type="button" onclick="hideCreateModal()" class="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-400">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showCreateModal() {
+            document.getElementById('discussionForm').reset();
+            document.getElementById('createModal').classList.remove('hidden');
+        }
+
+        function hideCreateModal() {
+            document.getElementById('createModal').classList.add('hidden');
+        }
+
+        function stopDiscussion(id) {
+            if (confirm('Are you sure you want to stop this discussion?')) {
+                fetch(`/api/discussions/${id}/stop`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'stopped') {
+                        location.reload();
+                    } else {
+                        alert('Failed to stop discussion: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error stopping discussion:', error);
+                    alert('Failed to stop discussion: ' + error.message);
+                });
+            }
+        }
+
+        // Form submission
+        document.getElementById('discussionForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const topic = formData.get('topic');
+            const agentIds = formData.getAll('agent_ids').map(id => parseInt(id));
+            const moderatorId = formData.get('moderator_id');
+            
+            if (agentIds.length === 0) {
+                alert('Please select at least one agent');
+                return;
+            }
+            
+            const requestData = {
+                topic: topic,
+                agent_ids: agentIds
+            };
+            
+            // Add moderator if selected
+            if (moderatorId && moderatorId !== '') {
+                requestData.moderator_id = parseInt(moderatorId);
+            }
+            
+            fetch('/api/discussions', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.id) {
+                    hideCreateModal();
+                    window.location.href = `/discussions/${data.id}`;
+                } else {
+                    throw new Error('Failed to create discussion');
+                }
+            })
+            .catch(error => {
+                console.error('Error creating discussion:', error);
+                alert('Failed to create discussion: ' + error.message);
+            });
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('createModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                hideCreateModal();
+            }
+        });
+
+        // Auto-refresh running discussions
+        setInterval(() => {
+            const runningElements = document.querySelectorAll('.animate-pulse');
+            if (runningElements.length > 0) {
+                location.reload();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

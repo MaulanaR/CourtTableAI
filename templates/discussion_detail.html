@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discussion Detail - Court Table AI</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loading {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+        .agent-response {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .typing-indicator::after {
+            content: '...';
+            animation: typing 1.5s infinite;
+        }
+        @keyframes typing {
+            0%, 20%, 50%, 80%, 100% { opacity: 0; }
+            40% { opacity: 1; }
+            60% { opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <nav class="bg-blue-600 text-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-bold">Court Table AI - Discussion Detail</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Dashboard</a>
+                    <a href="/agents" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Agents</a>
+                    <a href="/discussions" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Discussions</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <div class="px-4 py-6 sm:px-0">
+            <!-- Discussion Header -->
+            <div class="bg-white shadow rounded-lg p-6 mb-6">
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2">{{ .Discussion.Topic }}</h2>
+                        <div class="flex items-center space-x-4 text-sm text-gray-500">
+                            <span>ID: {{ .Discussion.ID }}</span>
+                            <span>Created: {{ .Discussion.CreatedAt.Format "Jan 02, 2006 15:04:05" }}</span>
+                            <span>Agents: {{ len .Discussion.AgentIDs }}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full 
+                            {{ if eq .Discussion.Status "running" }}bg-yellow-100 text-yellow-800 animate-pulse
+                            {{ else if eq .Discussion.Status "completed" }}bg-green-100 text-green-800
+                            {{ else }}bg-red-100 text-red-800{{ end }}">
+                            {{ .Discussion.Status }}
+                        </span>
+                        {{ if eq .Discussion.Status "running" }}
+                        <button onclick="stopDiscussion({{ .Discussion.ID }})" class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700 text-sm">
+                            Stop
+                        </button>
+                        {{ end }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <!-- Discussion Logs -->
+                <div class="lg:col-span-3">
+                    <div class="bg-white shadow rounded-lg">
+                        <div class="px-6 py-4 border-b border-gray-200">
+                            <h3 class="text-lg font-medium text-gray-900">Debate Transcript</h3>
+                        </div>
+                        <div id="transcript-container" class="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+                            {{ if .Logs }}
+                            {{ range .Logs }}
+                            <div class="p-6 agent-response {{ if .IsModerator }}bg-blue-50{{ end }}" data-log-id="{{ .ID }}">
+                                <div class="flex items-start space-x-3">
+                                    <div class="flex-shrink-0">
+                                        <div class="w-8 h-8 {{ if .IsModerator }}bg-purple-500{{ else }}bg-blue-500{{ end }} rounded-full flex items-center justify-center text-white text-sm font-medium">
+                                            {{ if .IsModerator }}M{{ else }}
+                                            {{ $agentName := "" }}
+                                            {{ range $.Agents }}
+                                                {{ if eq .ID .AgentID }}{{ $agentName = .Name }}{{ end }}
+                                            {{ end }}
+                                            {{ substr $agentName 0 1 | upper }}
+                                            {{ end }}
+                                        </div>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex items-center justify-between">
+                                            <div>
+                                                <span class="font-medium text-gray-900">
+                                                    {{ if .IsModerator }}
+                                                        Moderator
+                                                        {{ $moderatorName := "" }}
+                                                        {{ range $.Agents }}
+                                                            {{ if and $.Discussion.ModeratorID (eq .ID $.Discussion.ModeratorID) }}{{ $moderatorName = .Name }}{{ end }}
+                                                        {{ end }}
+                                                        ({{ $moderatorName }})
+                                                    {{ else }}
+                                                        {{ $agentName := "" }}
+                                                        {{ range $.Agents }}
+                                                            {{ if eq .ID .AgentID }}{{ $agentName = .Name }}{{ end }}
+                                                        {{ end }}
+                                                        {{ $agentName }}
+                                                    {{ end }}
+                                                </span>
+                                                <span class="text-sm text-gray-500 ml-2">{{ .CreatedAt.Format "15:04:05" }}</span>
+                                                {{ if .IsModerator }}
+                                                <span class="ml-2 px-2 py-1 text-xs rounded-full bg-purple-100 text-purple-800">Moderator</span>
+                                                {{ end }}
+                                            </div>
+                                            <div class="flex items-center space-x-2">
+                                                <span class="px-2 py-1 text-xs rounded-full 
+                                                    {{ if eq .Status "success" }}bg-green-100 text-green-800
+                                                    {{ else if eq .Status "timeout" }}bg-yellow-100 text-yellow-800
+                                                    {{ else }}bg-red-100 text-red-800{{ end }}">
+                                                    {{ .Status }}
+                                                </span>
+                                                <span class="text-xs text-gray-500">{{ .ResponseTime }}ms</span>
+                                                {{ if and (ne .Status "success") (not .IsModerator) }}
+                                                <button onclick="retryAgent({{ $.Discussion.ID }}, {{ .AgentID }})" 
+                                                        class="text-blue-600 hover:text-blue-900 text-sm">
+                                                    Retry
+                                                </button>
+                                                {{ end }}
+                                            </div>
+                                        </div>
+                                        <div class="mt-2 text-gray-700 whitespace-pre-wrap">{{ .Content }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {{ end }}
+                            {{ else }}
+                            <div class="p-6 text-center text-gray-500">
+                                {{ if eq .Discussion.Status "running" }}
+                                <div class="typing-indicator">Waiting for responses</div>
+                                {{ else }}
+                                <p>No responses recorded</p>
+                                {{ end }}
+                            </div>
+                            {{ end }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sidebar -->
+                <div class="lg:col-span-1">
+                    <!-- Participants -->
+                    <div class="bg-white shadow rounded-lg p-6 mb-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Participants</h3>
+                        
+                        {{ if .Discussion.ModeratorID }}
+                        <div class="mb-4">
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">Moderator</h4>
+                            {{ range .Agents }}
+                                {{ if eq .ID $.Discussion.ModeratorID }}
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-6 h-6 bg-purple-400 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                                        M
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium text-gray-900">{{ .Name }}</div>
+                                        <div class="text-xs text-gray-500">{{ .ModelName }}</div>
+                                    </div>
+                                </div>
+                                {{ end }}
+                            {{ end }}
+                        </div>
+                        {{ end }}
+                        
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-700 mb-2">Debate Participants</h4>
+                            <div class="space-y-3">
+                                {{ range .Discussion.AgentIDs }}
+                                {{ $currentAgentID := . }}
+                                {{ $agent := "" }}
+                                {{ range $.Agents }}
+                                    {{ if eq .ID $currentAgentID }}{{ $agent = . }}{{ end }}
+                                {{ end }}
+                                {{ if $agent }}
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-6 h-6 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs font-medium">
+                                        {{ substr $agent.Name 0 1 | upper }}
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="text-sm font-medium text-gray-900">{{ $agent.Name }}</div>
+                                        <div class="text-xs text-gray-500">{{ $agent.ModelName }}</div>
+                                    </div>
+                                </div>
+                                {{ end }}
+                                {{ end }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary -->
+                    {{ if .Discussion.FinalSummary }}
+                    <div class="bg-white shadow rounded-lg p-6">
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Summary</h3>
+                        <div class="text-sm text-gray-700 whitespace-pre-wrap">{{ .Discussion.FinalSummary }}</div>
+                    </div>
+                    {{ end }}
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        function stopDiscussion(id) {
+            if (confirm('Are you sure you want to stop this discussion?')) {
+                fetch(`/api/discussions/${id}/stop`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'stopped') {
+                        location.reload();
+                    } else {
+                        alert('Failed to stop discussion: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error stopping discussion:', error);
+                    alert('Failed to stop discussion: ' + error.message);
+                });
+            }
+        }
+
+        function retryAgent(discussionId, agentId) {
+            if (confirm('Retry this agent\'s response?')) {
+                fetch(`/api/discussions/${discussionId}/retry/${agentId}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'retry initiated') {
+                        // Refresh the page to show the new response
+                        setTimeout(() => location.reload(), 2000);
+                    } else {
+                        alert('Failed to retry agent: ' + (data.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error retrying agent:', error);
+                    alert('Failed to retry agent: ' + error.message);
+                });
+            }
+        }
+
+        // Auto-refresh for running discussions
+        {{ if eq .Discussion.Status "running" }}
+        let refreshInterval;
+        
+        function startAutoRefresh() {
+            refreshInterval = setInterval(() => {
+                // Check if discussion is still running
+                fetch(`/api/discussions/{{ .Discussion.ID }}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.discussion.status !== 'running') {
+                            clearInterval(refreshInterval);
+                            location.reload();
+                        } else {
+                            // Check for new logs
+                            const currentLogCount = document.querySelectorAll('.agent-response').length;
+                            if (data.logs.length > currentLogCount) {
+                                location.reload();
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error checking discussion status:', error);
+                    });
+            }, 5000); // Check every 5 seconds
+        }
+
+        // Start auto-refresh when page loads
+        startAutoRefresh();
+
+        // Clean up interval when page unloads
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+        {{ end }}
+
+        // Helper function to get first character (template function equivalent)
+        function getFirstChar(str) {
+            return str.charAt(0).toUpperCase();
+        }
+
+        // Scroll to bottom of transcript for new messages
+        function scrollToBottom() {
+            const container = document.getElementById('transcript-container');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        // Scroll to bottom on page load
+        window.addEventListener('load', scrollToBottom);
+    </script>
+</body>
+</html>
