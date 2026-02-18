@@ -1,5 +1,9 @@
 # Court Table AI - Multi-Agent Debate System
 
+<p align="center">
+  <img src="static/logo/logo.png" alt="Court Table AI Logo" width="200">
+</p>
+
 A web-based application for managing AI agents and facilitating automatic debates/discussions between agents using a "Round Robin with Timeout" schema to generate the best answers for users.
 
 ## Features
